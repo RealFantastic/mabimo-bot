@@ -5,13 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="bc588a54-fd69-405e-8bda-b4abfaf07992" name="Changes" comment="Initialize project structure with core modules, utilities, and dependencies.">
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/mabimo-bot.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/collectors/notice.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/collectors/notice.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -161,7 +155,7 @@
       <option name="presentableId" value="Default" />
       <updated>1774597552235</updated>
       <workItem from="1774597553260" duration="4379000" />
-      <workItem from="1774855648972" duration="4596000" />
+      <workItem from="1774855648972" duration="5036000" />
     </task>
     <task id="LOCAL-00001" summary="Initialize project structure with core modules, utilities, and dependencies.">
       <option name="closed" value="true" />
