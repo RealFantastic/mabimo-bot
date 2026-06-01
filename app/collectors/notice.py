@@ -1,6 +1,4 @@
-#imports
 from bs4 import BeautifulSoup
-from lxml.doctestcompare import strip
 
 from app.utils.http import get
 
@@ -12,7 +10,7 @@ BASE_URL = "https://mabinogimobile.nexon.com"
 # 공지사항 URL 작성
 NOTICE_URL = "https://mabinogimobile.nexon.com/News/notice"
 
-def fetch_notice_list():
+def fetch_notice_list() -> list[dict]:
     html = get(NOTICE_URL)
     soup = BeautifulSoup(html, "lxml")
 
