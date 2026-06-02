@@ -6,6 +6,7 @@ from app.utils.logger import get_logger
 
 
 logger = get_logger(__name__)
+DISCORD_CONTENT_LIMIT = 2000
 
 
 class DiscordNotificationError(Exception):
@@ -42,11 +43,25 @@ def format_notice_message(post: dict) -> str:
         )
         summary_text = fallback_summary(post.get("detail_body", ""))
 
-    return (
-        f"📢 [공지사항] {post['title']}\n\n"
-        f"{summary_text}\n\n"
-        f"🔗 원문: {post['url']}"
+    title_line = f"📢 [공지사항] {post['title']}"
+    url_line = f"🔗 원문: {post['url']}"
+    return _format_with_content_limit(
+        title_line=title_line,
+        body=summary_text,
+        url_line=url_line,
     )
+
+
+def _format_with_content_limit(*, title_line: str, body: str, url_line: str) -> str:
+    body_budget = DISCORD_CONTENT_LIMIT - len(title_line) - len(url_line) - 4
+    if body_budget >= 0:
+        return f"{title_line}\n\n{body[:body_budget]}\n\n{url_line}"
+
+    title_budget = DISCORD_CONTENT_LIMIT - len(url_line) - 2
+    if title_budget > 0:
+        return f"{title_line[:title_budget]}\n\n{url_line}"
+
+    return url_line[:DISCORD_CONTENT_LIMIT]
 
 
 def send_discord_notification(webhook_url: str, post: dict) -> None:

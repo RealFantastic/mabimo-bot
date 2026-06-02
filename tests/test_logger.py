@@ -49,14 +49,26 @@ class LoggerTest(unittest.TestCase):
         self.assertNotIn("hidden debug line", output)
         self.assertIn("visible info line", output)
 
-    def test_get_logger_supports_debug_output_by_default(self) -> None:
+    def test_get_logger_hides_debug_output_by_default(self) -> None:
         stream = io.StringIO()
         configure_logger(stream=stream)
 
         logger = get_logger("tests")
         logger.debug("default debug line")
+        logger.info("default info line")
 
-        self.assertIn("default debug line", stream.getvalue())
+        output = stream.getvalue()
+        self.assertNotIn("default debug line", output)
+        self.assertIn("default info line", output)
+
+    def test_log_level_env_debug_opts_into_debug_output(self) -> None:
+        stream = io.StringIO()
+        os.environ["LOG_LEVEL"] = "DEBUG"
+
+        logger = configure_logger(stream=stream)
+        logger.debug("visible debug line")
+
+        self.assertIn("visible debug line", stream.getvalue())
 
 
 if __name__ == "__main__":

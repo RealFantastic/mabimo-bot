@@ -5,7 +5,7 @@ from typing import TextIO
 
 
 LOGGER_NAME = "mabimo"
-DEFAULT_LOG_LEVEL = "DEBUG"
+DEFAULT_LOG_LEVEL = "INFO"
 _CONSOLE_HANDLER_NAME = "mabimo-console"
 
 
@@ -57,4 +57,4 @@ def _resolve_level(level_name: str | None) -> int:
     level = getattr(logging, level_name.strip().upper(), None)
     if isinstance(level, int):
         return level
-    return logging.DEBUG
+    return logging.INFO

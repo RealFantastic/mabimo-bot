@@ -11,6 +11,7 @@ from app.repositories.sqlite_repository import (
     insert_post,
 )
 from app.services.diff_service import detect_and_store_new_posts
+from app.services.summary_service import fallback_summary
 
 
 class DiffServiceTest(unittest.TestCase):
@@ -109,6 +110,50 @@ class DiffServiceTest(unittest.TestCase):
                 pending[0]["summary_text"],
                 "🧾 요약\n- 본문 수집은 성공했습니다.",
             )
+
+    def test_detect_and_store_new_posts_skips_summary_generation_for_empty_detail_body(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                initialize(connection)
+                detail_body_fetcher = Mock(return_value="")
+                summary_generator = Mock(return_value="should not be stored")
+
+                detect_and_store_new_posts(
+                    connection,
+                    [_post(thread_id="new", url="https://example.com/new")],
+                    board_type="notice",
+                    detail_body_fetcher=detail_body_fetcher,
+                    summary_generator=summary_generator,
+                )
+
+                pending = find_pending_notifications(connection)
+
+            summary_generator.assert_not_called()
+            self.assertEqual(pending[0]["summary_text"], fallback_summary(""))
+
+    def test_detect_and_store_new_posts_skips_summary_generation_for_whitespace_detail_body(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                initialize(connection)
+                detail_body_fetcher = Mock(return_value=" \n\t ")
+                summary_generator = Mock(return_value="should not be stored")
+
+                detect_and_store_new_posts(
+                    connection,
+                    [_post(thread_id="new", url="https://example.com/new")],
+                    board_type="notice",
+                    detail_body_fetcher=detail_body_fetcher,
+                    summary_generator=summary_generator,
+                )
+
+                pending = find_pending_notifications(connection)
+
+            summary_generator.assert_not_called()
+            self.assertEqual(pending[0]["summary_text"], fallback_summary(""))
 
 
 def _post(*, thread_id: str, url: str) -> dict:

@@ -77,6 +77,29 @@ class NotifierServiceTest(unittest.TestCase):
             ),
         )
 
+    def test_format_notice_message_limits_overlong_summary_and_keeps_url(self) -> None:
+        post = {
+            **_post(),
+            "summary_text": "a" * 3000,
+        }
+
+        message = format_notice_message(post)
+
+        self.assertLessEqual(len(message), 2000)
+        self.assertIn("https://example.com/notice/123", message)
+        self.assertIn("@everyone notice", message)
+
+    def test_format_notice_message_limits_overlong_fallback_body_and_keeps_url(self) -> None:
+        post = {
+            **_post(),
+            "detail_body": "body " * 1000,
+        }
+
+        message = format_notice_message(post)
+
+        self.assertLessEqual(len(message), 2000)
+        self.assertIn("https://example.com/notice/123", message)
+
 
 def _post() -> dict:
     return {

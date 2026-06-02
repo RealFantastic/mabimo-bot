@@ -39,10 +39,18 @@ def detect_and_store_new_posts(
                 post,
             )
         if summary_generator is not None:
-            post_to_insert["summary_text"] = _generate_summary(
-                summary_generator,
-                post_to_insert,
-            )
+            detail_body = str(post_to_insert.get("detail_body", ""))
+            if detail_body.strip():
+                post_to_insert["summary_text"] = _generate_summary(
+                    summary_generator,
+                    post_to_insert,
+                )
+            else:
+                logger.debug(
+                    "Skipping summary generation because detail body is empty: thread_id=%s",
+                    post["thread_id"],
+                )
+                post_to_insert["summary_text"] = fallback_summary("")
 
         logger.debug(
             "Inserting new post thread_id=%s board_type=%s",
