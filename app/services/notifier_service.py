@@ -1,6 +1,8 @@
 import httpx
 import time
 
+from app.services.summary_service import fallback_summary
+
 
 class DiscordNotificationError(Exception):
     def __init__(self, message: str, *, status_code: int | None = None) -> None:
@@ -28,12 +30,14 @@ def _retry_after_seconds(response: httpx.Response) -> float:
 
 
 def format_notice_message(post: dict) -> str:
+    summary_text = post.get("summary_text", "").strip()
+    if not summary_text:
+        summary_text = fallback_summary(post.get("detail_body", ""))
+
     return (
-        "[공지사항]\n\n"
-        f"제목: {post['title']}\n"
-        f"분류: {post.get('category', '')}\n"
-        f"작성일: {post.get('published_at', '')}\n"
-        f"링크: {post['url']}"
+        f"📢 [공지사항] {post['title']}\n\n"
+        f"{summary_text}\n\n"
+        f"🔗 원문: {post['url']}"
     )
 
 

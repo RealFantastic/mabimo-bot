@@ -23,6 +23,7 @@ from app.services.notifier_service import (
     DiscordNotificationError,
     send_discord_notification,
 )
+from app.services.summary_service import generate_notice_summary
 
 
 BOARD_TYPE = "notice"
@@ -69,6 +70,7 @@ def main() -> None:
             notices,
             board_type=BOARD_TYPE,
             detail_body_fetcher=fetch_notice_detail_body,
+            summary_generator=generate_notice_summary,
         )
         sent, failed = send_pending_notifications(connection, webhook_url)
 

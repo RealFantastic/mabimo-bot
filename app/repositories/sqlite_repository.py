@@ -26,6 +26,7 @@ def initialize(connection: sqlite3.Connection) -> None:
             published_at TEXT,
             url TEXT NOT NULL,
             detail_body TEXT NOT NULL DEFAULT '',
+            summary_text TEXT NOT NULL DEFAULT '',
             first_seen_at TEXT NOT NULL,
             notified_at TEXT
         )
@@ -35,6 +36,12 @@ def initialize(connection: sqlite3.Connection) -> None:
         connection,
         table_name="posts",
         column_name="detail_body",
+        definition="TEXT NOT NULL DEFAULT ''",
+    )
+    _ensure_column(
+        connection,
+        table_name="posts",
+        column_name="summary_text",
         definition="TEXT NOT NULL DEFAULT ''",
     )
     connection.commit()
@@ -89,10 +96,11 @@ def insert_post(
             published_at,
             url,
             detail_body,
+            summary_text,
             first_seen_at,
             notified_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
         """,
         (
             post["thread_id"],
@@ -102,6 +110,7 @@ def insert_post(
             post.get("published_at", ""),
             post["url"],
             post.get("detail_body", ""),
+            post.get("summary_text", ""),
             first_seen_at,
         ),
     )
@@ -129,6 +138,7 @@ def find_pending_notifications(connection: sqlite3.Connection) -> list[dict]:
             published_at,
             url,
             detail_body,
+            summary_text,
             first_seen_at,
             notified_at
         FROM posts

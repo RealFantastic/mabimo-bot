@@ -5,6 +5,7 @@ import httpx
 
 from app.services.notifier_service import (
     DiscordNotificationError,
+    format_notice_message,
     send_discord_notification,
 )
 
@@ -49,6 +50,32 @@ class NotifierServiceTest(unittest.TestCase):
 
         self.assertEqual(post.call_count, 2)
         sleep.assert_called_once_with(0.0)
+
+    def test_format_notice_message_uses_summary_text_and_approved_structure(self) -> None:
+        message = format_notice_message(
+            {
+                **_post(),
+                "title": "점검 안내",
+                "summary_text": "🧾 요약\n- 서버 점검이 진행됩니다.\n\n✅ 체크사항\n- 기간/시간: 10:00~12:00",
+            }
+        )
+
+        self.assertEqual(
+            message,
+            "\n".join(
+                [
+                    "📢 [공지사항] 점검 안내",
+                    "",
+                    "🧾 요약",
+                    "- 서버 점검이 진행됩니다.",
+                    "",
+                    "✅ 체크사항",
+                    "- 기간/시간: 10:00~12:00",
+                    "",
+                    "🔗 원문: https://example.com/notice/123",
+                ]
+            ),
+        )
 
 
 def _post() -> dict:

@@ -88,6 +88,40 @@ class SqliteRepositoryTest(unittest.TestCase):
 
             self.assertEqual(pending[0]["detail_body"], "Persisted detail body")
 
+    def test_initialize_adds_summary_text_column_to_existing_posts_table(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE posts (
+                        thread_id TEXT PRIMARY KEY,
+                        board_type TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        category TEXT,
+                        published_at TEXT,
+                        url TEXT NOT NULL,
+                        detail_body TEXT NOT NULL DEFAULT '',
+                        first_seen_at TEXT NOT NULL,
+                        notified_at TEXT
+                    )
+                    """
+                )
+                connection.commit()
+
+                initialize(connection)
+                insert_post(
+                    connection,
+                    {**_post(), "summary_text": "🧾 요약\n- 저장된 요약"},
+                    board_type="notice",
+                    first_seen_at="2026-06-02T00:00:00+00:00",
+                )
+
+                pending = find_pending_notifications(connection)
+
+            self.assertEqual(pending[0]["summary_text"], "🧾 요약\n- 저장된 요약")
+
     def test_insert_post_defaults_detail_body_to_empty_string(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "mabimo.db"
@@ -104,6 +138,23 @@ class SqliteRepositoryTest(unittest.TestCase):
                 pending = find_pending_notifications(connection)
 
             self.assertEqual(pending[0]["detail_body"], "")
+
+    def test_insert_post_defaults_summary_text_to_empty_string(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                initialize(connection)
+                insert_post(
+                    connection,
+                    _post(),
+                    board_type="notice",
+                    first_seen_at="2026-06-02T00:00:00+00:00",
+                )
+
+                pending = find_pending_notifications(connection)
+
+            self.assertEqual(pending[0]["summary_text"], "")
 
 
 def _post() -> dict:
