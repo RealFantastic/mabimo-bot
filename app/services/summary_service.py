@@ -3,8 +3,11 @@ import re
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from app.utils.logger import get_logger
+
 
 DEFAULT_SUMMARY_MODEL = "gpt-5-mini"
+logger = get_logger(__name__)
 
 
 def generate_notice_summary(
@@ -17,11 +20,13 @@ def generate_notice_summary(
     resolved_env = env if env is not None else os.environ
     api_key = resolved_env.get("OPENAI_API_KEY", "").strip()
     if not api_key:
+        logger.info("OPENAI_API_KEY is not configured; using fallback notice summary")
         return fallback_summary(detail_body)
 
     model = resolved_env.get("OPENAI_SUMMARY_MODEL", DEFAULT_SUMMARY_MODEL).strip()
     if not model:
         model = DEFAULT_SUMMARY_MODEL
+    logger.info("OpenAI summary model selected: %s", model)
 
     try:
         client = (
@@ -44,9 +49,14 @@ def generate_notice_summary(
         )
         summary_text = _extract_response_text(response)
         if summary_text:
+            logger.debug("OpenAI notice summary generated: chars=%s", len(summary_text))
             return summary_text
+        logger.warning("OpenAI summary response did not include text; using fallback summary")
     except Exception as exc:
-        print(f"[WARNING] Notice summary generation failed: {exc}")
+        logger.warning(
+            "OpenAI notice summary generation failed: error_type=%s; using fallback summary",
+            exc.__class__.__name__,
+        )
 
     return fallback_summary(detail_body)
 
@@ -54,8 +64,15 @@ def generate_notice_summary(
 def fallback_summary(detail_body: str, *, max_chars: int = 240) -> str:
     preview = re.sub(r"\s+", " ", detail_body).strip()
     if not preview:
+        logger.debug("Fallback summary used because detail body is empty")
         preview = "본문 내용을 확인할 수 없습니다."
     elif len(preview) > max_chars:
+        logger.debug(
+            "Fallback summary truncating detail preview: chars=%s max_chars=%s",
+            len(preview),
+            max_chars,
+        )
+        # Prefer ending fallback previews at a sentence boundary when one is nearby.
         truncated = preview[:max_chars]
         sentence_boundary = max(
             truncated.rfind("."),

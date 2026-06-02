@@ -2,6 +2,8 @@ import re
 
 from bs4 import BeautifulSoup
 
+from app.utils.logger import get_logger
+
 
 _BODY_SELECTORS = (
     '[data-mm-boardview] .view_body',
@@ -15,24 +17,34 @@ _BODY_SELECTORS = (
     '.board_view .view_cont',
     '.board_view .view_content',
 )
+logger = get_logger(__name__)
 
 
 def parse_notice_detail_body(html: str) -> str:
     soup = BeautifulSoup(html, "lxml")
     body = _find_body_element(soup)
     if body is None:
+        logger.warning("Notice detail body element not found")
         return ""
 
+    ignored_count = len(body.select("script, style, noscript"))
     for ignored in body.select("script, style, noscript"):
         ignored.decompose()
 
-    return _normalize_plain_text(body.get_text(separator="\n"))
+    parsed_body = _normalize_plain_text(body.get_text(separator="\n"))
+    logger.debug(
+        "Notice detail body parsed: ignored_nodes=%s body_chars=%s",
+        ignored_count,
+        len(parsed_body),
+    )
+    return parsed_body
 
 
 def _find_body_element(soup: BeautifulSoup):
     for selector in _BODY_SELECTORS:
         element = soup.select_one(selector)
         if element is not None:
+            logger.debug("Notice detail body selector matched: selector=%s", selector)
             return element
     return None
 
