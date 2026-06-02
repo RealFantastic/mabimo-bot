@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 
+from app.parsers.detail_parser import parse_notice_detail_body
 from app.utils.http import get
 
 
@@ -47,3 +48,8 @@ def fetch_notice_list() -> list[dict]:
         })
 
     return notices
+
+
+def fetch_notice_detail_body(url: str) -> str:
+    html = get(url)
+    return parse_notice_detail_body(html)

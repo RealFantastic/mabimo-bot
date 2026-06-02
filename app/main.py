@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.collectors.notice import fetch_notice_list
+from app.collectors.notice import fetch_notice_detail_body, fetch_notice_list
 from app.repositories.sqlite_repository import (
     connect,
     find_pending_notifications,
@@ -68,6 +68,7 @@ def main() -> None:
             connection,
             notices,
             board_type=BOARD_TYPE,
+            detail_body_fetcher=fetch_notice_detail_body,
         )
         sent, failed = send_pending_notifications(connection, webhook_url)
 
