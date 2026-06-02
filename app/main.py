@@ -1,5 +1,6 @@
 import os
 import sys
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,7 +19,10 @@ from app.repositories.sqlite_repository import (
     update_notified_at,
 )
 from app.services.diff_service import detect_and_store_new_posts
-from app.services.notifier_service import send_discord_notification
+from app.services.notifier_service import (
+    DiscordNotificationError,
+    send_discord_notification,
+)
 
 
 BOARD_TYPE = "notice"
@@ -36,9 +40,13 @@ def send_pending_notifications(connection, webhook_url: str | None) -> tuple[int
     for post in pending_posts:
         try:
             send_discord_notification(webhook_url, post)
-        except Exception as exc:
+        except DiscordNotificationError as exc:
             failed += 1
             print(f"[ERROR] Discord send failed for {post['thread_id']}: {exc}")
+            continue
+        except Exception:
+            failed += 1
+            print(f"[ERROR] Discord send failed for {post['thread_id']}: unexpected error")
             continue
 
         notified_at = datetime.now(timezone.utc).isoformat()
@@ -54,7 +62,7 @@ def main() -> None:
     notices = fetch_notice_list()
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
 
-    with connect() as connection:
+    with closing(connect()) as connection:
         initialize(connection)
         new_posts = detect_and_store_new_posts(
             connection,

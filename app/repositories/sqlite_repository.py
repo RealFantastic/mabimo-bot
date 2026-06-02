@@ -1,13 +1,16 @@
+import os
 import sqlite3
 from pathlib import Path
 from typing import Iterable
 
 
-DEFAULT_DB_PATH = Path("mabimo.db")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DB_PATH = PROJECT_ROOT / "mabimo.db"
 
 
-def connect(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
-    connection = sqlite3.connect(db_path)
+def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
+    resolved_db_path = Path(os.getenv("MABIMO_DB_PATH") or db_path or DEFAULT_DB_PATH)
+    connection = sqlite3.connect(resolved_db_path)
     connection.row_factory = sqlite3.Row
     return connection
 
