@@ -30,48 +30,13 @@ def initialize(connection: sqlite3.Connection) -> None:
             category TEXT,
             published_at TEXT,
             url TEXT NOT NULL,
-            detail_body TEXT NOT NULL DEFAULT '',
-            summary_text TEXT NOT NULL DEFAULT '',
             first_seen_at TEXT NOT NULL,
             notified_at TEXT
         )
         """
     )
-    # Keep older local databases compatible with the detail/summary storage schema.
-    _ensure_column(
-        connection,
-        table_name="posts",
-        column_name="detail_body",
-        definition="TEXT NOT NULL DEFAULT ''",
-    )
-    _ensure_column(
-        connection,
-        table_name="posts",
-        column_name="summary_text",
-        definition="TEXT NOT NULL DEFAULT ''",
-    )
     connection.commit()
     logger.info("SQLite schema initialization complete")
-
-
-def _ensure_column(
-    connection: sqlite3.Connection,
-    *,
-    table_name: str,
-    column_name: str,
-    definition: str,
-) -> None:
-    columns = {
-        row["name"]
-        for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
-    }
-    if column_name not in columns:
-        logger.info("Adding missing SQLite column: %s.%s", table_name, column_name)
-        connection.execute(
-            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"
-        )
-    else:
-        logger.debug("SQLite column already exists: %s.%s", table_name, column_name)
 
 
 def find_existing_thread_ids(
@@ -117,12 +82,10 @@ def insert_post(
             category,
             published_at,
             url,
-            detail_body,
-            summary_text,
             first_seen_at,
             notified_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
         """,
         (
             post["thread_id"],
@@ -131,8 +94,6 @@ def insert_post(
             post.get("category", ""),
             post.get("published_at", ""),
             post["url"],
-            post.get("detail_body", ""),
-            post.get("summary_text", ""),
             first_seen_at,
         ),
     )
@@ -166,8 +127,6 @@ def find_pending_notifications(connection: sqlite3.Connection) -> list[dict]:
             category,
             published_at,
             url,
-            detail_body,
-            summary_text,
             first_seen_at,
             notified_at
         FROM posts

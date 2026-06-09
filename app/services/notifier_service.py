@@ -1,7 +1,6 @@
 import httpx
 import time
 
-from app.services.summary_service import fallback_summary
 from app.utils.logger import get_logger
 
 
@@ -35,27 +34,26 @@ def _retry_after_seconds(response: httpx.Response) -> float:
 
 
 def format_notice_message(post: dict) -> str:
-    summary_text = post.get("summary_text", "").strip()
-    if not summary_text:
-        logger.debug(
-            "Formatting notice message with fallback summary: thread_id=%s",
-            post["thread_id"],
-        )
-        summary_text = fallback_summary(post.get("detail_body", ""))
-
     title_line = f"📢 [공지사항] {post['title']}"
+    category_line = f"분류: {post.get('category', '')}"
+    published_at_line = f"작성일: {post.get('published_at', '')}"
     url_line = f"🔗 원문: {post['url']}"
     return _format_with_content_limit(
         title_line=title_line,
-        body=summary_text,
+        metadata_lines=[category_line, published_at_line],
         url_line=url_line,
     )
 
 
-def _format_with_content_limit(*, title_line: str, body: str, url_line: str) -> str:
-    body_budget = DISCORD_CONTENT_LIMIT - len(title_line) - len(url_line) - 4
-    if body_budget >= 0:
-        return f"{title_line}\n\n{body[:body_budget]}\n\n{url_line}"
+def _format_with_content_limit(
+    *,
+    title_line: str,
+    metadata_lines: list[str],
+    url_line: str,
+) -> str:
+    message = "\n".join([title_line, "", *metadata_lines, url_line])
+    if len(message) <= DISCORD_CONTENT_LIMIT:
+        return message
 
     title_budget = DISCORD_CONTENT_LIMIT - len(url_line) - 2
     if title_budget > 0:
