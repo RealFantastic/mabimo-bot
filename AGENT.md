@@ -159,6 +159,14 @@ DISCORD_WEBHOOK_URL
 
 ```powershell
 python app/main.py
+python app/main.py run-once
+```
+
+APScheduler 자동 실행 명령:
+
+```powershell
+python app/main.py scheduler
+python app/main.py scheduler --interval-minutes 5
 ```
 
 최소 콘솔 출력:
@@ -187,8 +195,8 @@ failed: N
 - `app/repositories/`: SQLite 저장소 접근
 - `app/services/`: 신규 감지, 알림 등 비즈니스 로직
 - `app/utils/`: HTTP, logger 등 공통 유틸
-- `app/main.py`: 수동 실행 entrypoint
-- `app/scheduler.py`: 이후 APScheduler 도입 시 사용
+- `app/main.py`: 수동 실행 및 scheduler 명령 entrypoint
+- `app/scheduler.py`: APScheduler interval job 구성
 
 ## 문서 기준
 
@@ -196,6 +204,11 @@ failed: N
 - `docs/interview-summary-notice-mvp.md`는 1차 MVP 인터뷰 요약이다.
 - `.omc/specs/deep-interview-mabimo-notice-mvp.md`는 deep interview 기반 상세 명세이다.
 - 구현 범위가 바뀌면 관련 문서도 함께 업데이트한다.
+
+## 확장 리스크
+
+- 현재 DB는 `thread_id` 단일 primary key를 사용한다. 향후 게시판을 실제로 늘릴 때는 `(board_type, thread_id)` 기준 유니크 제약을 검토한다.
+- 미등록 `board_type`은 알림 라벨 매핑 실패로 처리하고 공지사항으로 대체하지 않는다. 현재는 스키마 변경 없이 실패 집계와 로그에 남기며, pending 재시도 상태가 유지될 수 있다.
 
 ## 커밋 전 체크
 
