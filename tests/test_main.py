@@ -131,10 +131,57 @@ class MainTest(unittest.TestCase):
                     )
 
                 self.assertEqual(find_pending_notifications(connection), [])
+                columns = [
+                    row["name"]
+                    for row in connection.execute("PRAGMA table_info(posts)").fetchall()
+                ]
+                self.assertNotIn("notified_at", columns)
+                delivery = connection.execute(
+                    """
+                    SELECT
+                        status,
+                        attempt_count,
+                        sent_at,
+                        last_attempt_at,
+                        error_message,
+                        response_status_code
+                    FROM notification_deliveries
+                    WHERE thread_id = ?
+                    """,
+                    ("123",),
+                ).fetchone()
 
         self.assertEqual(send.call_count, 2)
         retried_post = send.call_args.args[1]
         self.assertEqual(retried_post["thread_id"], "123")
+        self.assertEqual(delivery["status"], "sent")
+        self.assertEqual(delivery["attempt_count"], 2)
+        self.assertIsNotNone(delivery["sent_at"])
+        self.assertIsNotNone(delivery["last_attempt_at"])
+        self.assertIsNone(delivery["error_message"])
+        self.assertEqual(delivery["response_status_code"], 204)
+
+    def test_send_pending_notifications_without_webhook_records_retryable_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                initialize(connection)
+                insert_post(
+                    connection,
+                    _post(),
+                    board_type="notice",
+                    first_seen_at="2026-06-02T00:00:00+00:00",
+                )
+
+                self.assertEqual(send_pending_notifications(connection, None), (0, 1))
+
+                pending = find_pending_notifications(connection)
+
+            self.assertEqual([delivery["thread_id"] for delivery in pending], ["123"])
+            self.assertEqual(pending[0]["status"], "pending")
+            self.assertEqual(pending[0]["attempt_count"], 1)
+            self.assertEqual(pending[0]["error_message"], "DISCORD_WEBHOOK_URL is not configured.")
 
 
 def _post(thread_id: str = "123") -> dict:

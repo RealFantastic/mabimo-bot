@@ -41,6 +41,9 @@ class DiffServiceTest(unittest.TestCase):
                     post["thread_id"]: post for post in find_pending_notifications(connection)
                 }
                 self.assertEqual(pending_by_id["new"]["url"], "https://example.com/new")
+                self.assertEqual(pending_by_id["new"]["status"], "pending")
+                self.assertEqual(pending_by_id["new"]["notification_type"], "new_post")
+                self.assertEqual(pending_by_id["new"]["channel_type"], "discord")
                 self.assertEqual(pending_by_id["existing"]["url"], "https://example.com/existing")
 
 

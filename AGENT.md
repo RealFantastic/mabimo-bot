@@ -83,7 +83,8 @@ APScheduler를 붙여 5~10분 주기로 자동 실행한다.
 
 ## 데이터 모델 기준
 
-1차 MVP의 마스터 테이블은 `posts`이다.
+1차 MVP의 게시글 마스터 테이블은 `posts`이다. 발송 상태와 발송 이력은
+`notification_deliveries`가 관리한다.
 
 ```text
 thread_id     TEXT PRIMARY KEY
@@ -93,7 +94,6 @@ category      TEXT
 published_at  TEXT
 url           TEXT NOT NULL
 first_seen_at TEXT NOT NULL
-notified_at   TEXT
 ```
 
 필드 의미:
@@ -102,7 +102,32 @@ notified_at   TEXT
 - `board_type`: 1차 MVP에서는 `notice`를 사용한다.
 - `published_at`: 공식 사이트에 표시된 작성일자이다.
 - `first_seen_at`: 봇이 해당 게시글을 처음 발견한 시각이다.
-- `notified_at`: Discord 전송 성공 시각이다. `NULL`이면 전송 대기 또는 실패 상태이다.
+
+알림 발송 테이블은 `notification_deliveries`이다.
+
+```text
+id
+notification_type
+channel_type
+status
+board_type
+thread_id
+title
+url
+message
+attempt_count
+created_at
+last_attempt_at
+sent_at
+error_message
+response_status_code
+```
+
+- 신규 게시글 Discord 알림은 `notification_type='new_post'`, `channel_type='discord'`를 사용한다.
+- `status='pending'`이면 발송 대상이다.
+- 성공 시 `status='sent'`, `sent_at`, `last_attempt_at`, `attempt_count`, `response_status_code`를 갱신한다.
+- 실패 시 재시도를 위해 `status='pending'`을 유지하고 `attempt_count`, `last_attempt_at`, `error_message`, `response_status_code`를 기록한다.
+- 테스트 발송도 기록할 수 있어 `posts` FK는 두지 않는다.
 
 향후 버저닝은 `posts` 테이블을 직접 복잡하게 만들지 말고,
 `thread_id`를 참조하는 별도 `post_versions` 테이블로 확장한다.
@@ -126,9 +151,10 @@ change_type
 - DB에 같은 `thread_id`가 있으면 기존 글이다.
 - 1차 MVP에서는 같은 `thread_id`의 제목/본문 변경을 감지하지 않는다.
 - 신규 글은 Discord 전송 전에 먼저 DB에 저장한다.
-- Discord 전송 성공 시 `notified_at`을 기록한다.
-- Discord 전송 실패 시 `notified_at = NULL`로 남겨 재시도 가능하게 한다.
-- 이후 실행에서 `notified_at IS NULL`인 글은 재전송 대상이 될 수 있다.
+- 신규 글 저장 시 해당 글의 `notification_deliveries` pending row를 만든다.
+- Discord 전송 성공 시 해당 delivery를 `sent`로 갱신한다.
+- Discord 전송 실패 시 delivery는 `pending`으로 남겨 재시도 가능하게 한다.
+- 이후 실행에서 `notification_deliveries.status = 'pending'`인 row가 재전송 대상이 될 수 있다.
 
 ## Discord 알림 기준
 
@@ -185,8 +211,8 @@ failed: N
 .\.venv\Scripts\python.exe app\main.py
 ```
 
-`DISCORD_WEBHOOK_URL`이 없으면 실제 전송은 실패 집계로 남을 수 있다. 이 경우 DB에
-`notified_at = NULL`로 남는 것이 의도된 동작이다.
+`DISCORD_WEBHOOK_URL`이 없으면 실제 전송은 실패 집계로 남을 수 있다. 이 경우 delivery는
+`pending` 상태로 남고 attempt/error 정보가 기록되는 것이 의도된 동작이다.
 
 ## 코드 구조 기준
 

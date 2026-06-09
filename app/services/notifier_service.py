@@ -90,7 +90,7 @@ def _format_with_content_limit(
     return url_line[:DISCORD_CONTENT_LIMIT]
 
 
-def send_discord_notification(webhook_url: str, post: dict) -> None:
+def send_discord_notification(webhook_url: str, post: dict) -> int:
     message_post = post if post.get("board_type") else {**post, "board_type": "notice"}
     message = format_post_message(message_post)
     thread_id = post["thread_id"]
@@ -123,7 +123,7 @@ def send_discord_notification(webhook_url: str, post: dict) -> None:
                 thread_id,
                 response.status_code,
             )
-            return
+            return response.status_code
         except httpx.HTTPStatusError as exc:
             response = exc.response
             if response.status_code == 429 and attempt == 0:
