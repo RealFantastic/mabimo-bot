@@ -35,6 +35,52 @@ def initialize(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    # notification_deliveries records each notification send attempt without a
+    # strong posts FK because test sends may not map to a real post.
+    #
+    # Columns:
+    # - id: local delivery row identifier.
+    # - notification_type: delivery reason; expected values are new_post, updated_post, test.
+    # - channel_type: messenger channel; expected values are discord, slack, kakaotalk.
+    # - status: send lifecycle state; expected values are pending, sent, failed, skipped.
+    # - board_type: optional board identity for real post notifications; NULL for test sends.
+    # - thread_id: optional post thread identity; NULL for test sends.
+    # - title: optional notification title snapshot for delivery logs.
+    # - url: optional target URL snapshot for delivery logs.
+    # - message: rendered notification body snapshot for delivery logs.
+    # - attempt_count: number of send attempts recorded for this delivery.
+    # - created_at: row creation timestamp.
+    # - last_attempt_at: timestamp of the latest send attempt.
+    # - sent_at: timestamp of successful send completion.
+    # - error_message: latest send failure detail, if any.
+    # - response_status_code: latest channel response status code, if available.
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notification_deliveries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            notification_type TEXT NOT NULL CHECK (
+                notification_type IN ('new_post', 'updated_post', 'test')
+            ),
+            channel_type TEXT NOT NULL CHECK (
+                channel_type IN ('discord', 'slack', 'kakaotalk')
+            ),
+            status TEXT NOT NULL DEFAULT 'pending' CHECK (
+                status IN ('pending', 'sent', 'failed', 'skipped')
+            ),
+            board_type TEXT,
+            thread_id TEXT,
+            title TEXT,
+            url TEXT,
+            message TEXT NOT NULL DEFAULT '',
+            attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_attempt_at TEXT,
+            sent_at TEXT,
+            error_message TEXT,
+            response_status_code INTEGER
+        )
+        """
+    )
     connection.commit()
     logger.info("SQLite schema initialization complete")
 
