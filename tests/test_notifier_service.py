@@ -51,12 +51,11 @@ class NotifierServiceTest(unittest.TestCase):
         self.assertEqual(post.call_count, 2)
         sleep.assert_called_once_with(0.0)
 
-    def test_format_notice_message_uses_summary_text_and_approved_structure(self) -> None:
+    def test_format_notice_message_uses_list_fields_only(self) -> None:
         message = format_notice_message(
             {
                 **_post(),
                 "title": "점검 안내",
-                "summary_text": "🧾 요약\n- 서버 점검이 진행됩니다.\n\n✅ 체크사항\n- 기간/시간: 10:00~12:00",
             }
         )
 
@@ -66,33 +65,17 @@ class NotifierServiceTest(unittest.TestCase):
                 [
                     "📢 [공지사항] 점검 안내",
                     "",
-                    "🧾 요약",
-                    "- 서버 점검이 진행됩니다.",
-                    "",
-                    "✅ 체크사항",
-                    "- 기간/시간: 10:00~12:00",
-                    "",
+                    "분류: notice",
+                    "작성일: 2026-06-02",
                     "🔗 원문: https://example.com/notice/123",
                 ]
             ),
         )
 
-    def test_format_notice_message_limits_overlong_summary_and_keeps_url(self) -> None:
+    def test_format_notice_message_limits_overlong_title_and_keeps_url(self) -> None:
         post = {
             **_post(),
-            "summary_text": "a" * 3000,
-        }
-
-        message = format_notice_message(post)
-
-        self.assertLessEqual(len(message), 2000)
-        self.assertIn("https://example.com/notice/123", message)
-        self.assertIn("@everyone notice", message)
-
-    def test_format_notice_message_limits_overlong_fallback_body_and_keeps_url(self) -> None:
-        post = {
-            **_post(),
-            "detail_body": "body " * 1000,
+            "title": "a" * 3000,
         }
 
         message = format_notice_message(post)

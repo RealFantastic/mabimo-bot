@@ -1,5 +1,9 @@
 # Deep Interview Spec: Notice Body Summary
 
+> Status update: withdrawn on 2026-06-09.
+>
+> 사용자 조사 결과, 요약보다 게시글이 올라오는 즉시 제목과 링크를 빠르게 전달하는 방식이 더 적합하다고 결정했다. 이 명세의 OpenAI 요약, 상세 본문 수집, 요약 저장 요구사항은 현재 제품 방향에서 철회되었다. 자동 실행 기획은 요약 코드 제거 커밋 이후 별도 인터뷰에서 진행한다.
+
 ## Metadata
 - Interview ID: notice-summary-2026-06-02
 - Rounds: 5
@@ -9,7 +13,7 @@
 - Threshold: 20%
 - Threshold Source: default
 - Initial Context Summarized: no
-- Status: approved for implementation
+- Status: withdrawn
 
 ## Clarity Breakdown
 | Dimension | Score | Weight | Weighted |

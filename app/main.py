@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.collectors.notice import fetch_notice_detail_body, fetch_notice_list
+from app.collectors.notice import fetch_notice_list
 from app.repositories.sqlite_repository import (
     connect,
     find_pending_notifications,
@@ -23,7 +23,6 @@ from app.services.notifier_service import (
     DiscordNotificationError,
     send_discord_notification,
 )
-from app.services.summary_service import generate_notice_summary
 from app.utils.logger import configure_logger, get_logger
 
 
@@ -82,8 +81,6 @@ def main() -> None:
             connection,
             notices,
             board_type=BOARD_TYPE,
-            detail_body_fetcher=fetch_notice_detail_body,
-            summary_generator=generate_notice_summary,
         )
         logger.info("New notice count: %s", len(new_posts))
         sent, failed = send_pending_notifications(connection, webhook_url)

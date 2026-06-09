@@ -26,7 +26,7 @@ README, deep interview 결과, 구현 중 확정된 결정사항을 우선순위
 - 기본 통합 브랜치는 `dev`이다.
 - 작업은 항상 `dev`에서 새 feature 브랜치를 만들어 진행한다.
 - feature 브랜치 이름은 작업 단위가 드러나게 짓는다.
-  - 예: `feature/notice-mvp`, `feature/detail-summary`, `feature/scheduler`
+  - 예: `feature/notice-mvp`, `feature/remove-summary`, `feature/scheduler`
 - 작업 완료 후 feature 브랜치의 결과를 PR로 `dev`에 merge하는 흐름을 따른다.
 - `main`은 직접 작업 브랜치로 사용하지 않는다.
 - 커밋 전에는 `git status --short`로 변경 범위를 확인한다.
@@ -65,22 +65,21 @@ README, deep interview 결과, 구현 중 확정된 결정사항을 우선순위
 공지사항 목록 수집, `thread_id` 신규 감지, SQLite 저장, Discord Webhook 전송,
 수동 실행 1회 흐름을 완성한다.
 
-### 2차: 상세 본문과 요약
+### 2차: 자동화
 
-신규 글 상세 본문을 수집하고, 단순 본문 일부 추출 또는 요약을 붙인다.
-LLM 요약은 명시적으로 요청되기 전까지 도입하지 않는다.
+APScheduler를 붙여 5~10분 주기로 자동 실행한다.
 
-### 3차: 기존 글 업데이트 감지와 버저닝
-
-기존 글의 제목 변경, 상태 표시 변경, 본문 변경을 감지하고 버전 이력을 저장한다.
-
-### 4차: 게시판 확장
+### 3차: 게시판 확장
 
 업데이트와 이벤트 게시판 수집을 추가한다.
 
-### 5차: 자동화
+### 4차: 배포 후 알림 안정화
 
-APScheduler를 붙여 5~10분 주기로 자동 실행한다.
+실제 사용자 피드백을 바탕으로 메시지 포맷, 실패 처리, 중복 방지, 속도 체감을 개선한다.
+
+### 보류: 기존 글 업데이트 감지와 버저닝
+
+본문 해시 비교, 제목 변경, 상태 표시 변경, 본문 변경 감지와 버전 이력 저장은 추후 별도 기획에서 결정한다.
 
 ## 데이터 모델 기준
 
@@ -150,6 +149,8 @@ DISCORD_WEBHOOK_URL
 링크: {url}
 ```
 
+알림 메시지는 목록에서 수집한 데이터만 사용한다. 상세 본문 수집, 본문 요약, LLM 요약은 현재 제품 방향에서 제외한다.
+
 1차 MVP에서는 게시판별 Webhook 분리, 멘션, embed, slash command를 구현하지 않는다.
 
 ## 실행 기준
@@ -181,7 +182,7 @@ failed: N
 
 ## 코드 구조 기준
 
-- `app/collectors/`: 게시판 목록 또는 상세 수집
+- `app/collectors/`: 게시판 목록 수집
 - `app/parsers/`: HTML 파싱 로직
 - `app/repositories/`: SQLite 저장소 접근
 - `app/services/`: 신규 감지, 알림 등 비즈니스 로직

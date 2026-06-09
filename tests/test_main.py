@@ -15,7 +15,7 @@ from app.services.notifier_service import DiscordNotificationError
 
 
 class MainTest(unittest.TestCase):
-    def test_send_pending_notifications_retries_with_stored_summary_text(self) -> None:
+    def test_send_pending_notifications_retries_pending_post(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "mabimo.db"
 
@@ -23,11 +23,7 @@ class MainTest(unittest.TestCase):
                 initialize(connection)
                 insert_post(
                     connection,
-                    {
-                        **_post(),
-                        "detail_body": "stored detail body",
-                        "summary_text": "stored summary text",
-                    },
+                    _post(),
                     board_type="notice",
                     first_seen_at="2026-06-02T00:00:00+00:00",
                 )
@@ -52,8 +48,7 @@ class MainTest(unittest.TestCase):
 
         self.assertEqual(send.call_count, 2)
         retried_post = send.call_args.args[1]
-        self.assertEqual(retried_post["summary_text"], "stored summary text")
-        self.assertEqual(retried_post["detail_body"], "stored detail body")
+        self.assertEqual(retried_post["thread_id"], "123")
 
 
 def _post() -> dict:

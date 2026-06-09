@@ -1,6 +1,5 @@
 from bs4 import BeautifulSoup
 
-from app.parsers.detail_parser import parse_notice_detail_body
 from app.utils.http import get
 from app.utils.logger import get_logger
 
@@ -56,12 +55,3 @@ def fetch_notice_list() -> list[dict]:
 
     logger.info("Notice list parsed: count=%s", len(notices))
     return notices
-
-
-def fetch_notice_detail_body(url: str) -> str:
-    logger.debug("Fetching notice detail: url=%s", url)
-    html = get(url)
-    logger.debug("Notice detail fetched: chars=%s", len(html))
-    body = parse_notice_detail_body(html)
-    logger.debug("Notice detail parsed: body_chars=%s", len(body))
-    return body
