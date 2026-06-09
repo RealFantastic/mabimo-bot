@@ -6,12 +6,22 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 DISCORD_CONTENT_LIMIT = 2000
+BOARD_LABELS = {
+    "notice": "공지사항",
+    "update": "업데이트",
+    "event": "이벤트",
+    "known_issue": "확인 중인 문제",
+}
 
 
 class DiscordNotificationError(Exception):
     def __init__(self, message: str, *, status_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
+
+
+class UnknownBoardTypeError(ValueError):
+    pass
 
 
 def _retry_after_seconds(response: httpx.Response) -> float:
@@ -45,6 +55,24 @@ def format_notice_message(post: dict) -> str:
     )
 
 
+def format_post_message(post: dict) -> str:
+    board_type = post.get("board_type")
+    try:
+        label = BOARD_LABELS[board_type]
+    except KeyError as exc:
+        raise UnknownBoardTypeError(f"Unknown board_type: {board_type}") from exc
+
+    title_line = f"[{label}] {post['title']}"
+    category_line = f"분류: {post.get('category', '')}"
+    published_at_line = f"작성일: {post.get('published_at', '')}"
+    url_line = f"링크: {post['url']}"
+    return _format_with_content_limit(
+        title_line=title_line,
+        metadata_lines=[category_line, published_at_line],
+        url_line=url_line,
+    )
+
+
 def _format_with_content_limit(
     *,
     title_line: str,
@@ -63,7 +91,8 @@ def _format_with_content_limit(
 
 
 def send_discord_notification(webhook_url: str, post: dict) -> None:
-    message = format_notice_message(post)
+    message_post = post if post.get("board_type") else {**post, "board_type": "notice"}
+    message = format_post_message(message_post)
     thread_id = post["thread_id"]
     logger.debug(
         "Formatted notice message: thread_id=%s chars=%s",

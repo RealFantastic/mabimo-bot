@@ -5,7 +5,9 @@ import httpx
 
 from app.services.notifier_service import (
     DiscordNotificationError,
+    UnknownBoardTypeError,
     format_notice_message,
+    format_post_message,
     send_discord_notification,
 )
 
@@ -82,6 +84,15 @@ class NotifierServiceTest(unittest.TestCase):
 
         self.assertLessEqual(len(message), 2000)
         self.assertIn("https://example.com/notice/123", message)
+
+    def test_format_post_message_uses_board_specific_label(self) -> None:
+        message = format_post_message({**_post(), "board_type": "update"})
+
+        self.assertIn("[업데이트]", message)
+
+    def test_unknown_board_type_is_not_silently_labeled_as_notice(self) -> None:
+        with self.assertRaises(UnknownBoardTypeError):
+            format_post_message({**_post(), "board_type": "unregistered"})
 
 
 def _post() -> dict:

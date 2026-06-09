@@ -1,6 +1,9 @@
+import argparse
 import os
 import sys
 from contextlib import closing
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,13 +24,51 @@ from app.repositories.sqlite_repository import (
 from app.services.diff_service import detect_and_store_new_posts
 from app.services.notifier_service import (
     DiscordNotificationError,
+    UnknownBoardTypeError,
     send_discord_notification,
 )
+from app.scheduler import DEFAULT_INTERVAL_MINUTES, create_scheduler
 from app.utils.logger import configure_logger, get_logger
 
 
 BOARD_TYPE = "notice"
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class BoardSource:
+    board_type: str
+    fetch: Callable[[], list[dict]]
+
+
+BOARD_SOURCES: tuple[BoardSource, ...] = (
+    BoardSource(board_type=BOARD_TYPE, fetch=fetch_notice_list),
+)
+
+
+def positive_interval(value: str) -> int:
+    try:
+        interval = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("interval must be an integer") from exc
+    if interval <= 0:
+        raise argparse.ArgumentTypeError("interval must be greater than 0")
+    return interval
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the Mabimo board notifier.")
+    subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("run-once", help="Run new-post detection once and exit.")
+    scheduler_parser = subparsers.add_parser("scheduler", help="Run the APScheduler loop.")
+    scheduler_parser.add_argument(
+        "--interval-minutes",
+        type=positive_interval,
+        default=DEFAULT_INTERVAL_MINUTES,
+        help="Scheduler interval in minutes. Must be greater than 0.",
+    )
+    parser.set_defaults(command="run-once", interval_minutes=DEFAULT_INTERVAL_MINUTES)
+    return parser.parse_args(argv)
 
 
 def send_pending_notifications(connection, webhook_url: str | None) -> tuple[int, int]:
@@ -48,6 +89,10 @@ def send_pending_notifications(connection, webhook_url: str | None) -> tuple[int
             failed += 1
             logger.error("Discord send failed for thread_id=%s: %s", thread_id, exc)
             continue
+        except UnknownBoardTypeError as exc:
+            failed += 1
+            logger.error("Discord message skipped for thread_id=%s: %s", thread_id, exc)
+            continue
         except Exception:
             failed += 1
             logger.exception(
@@ -65,33 +110,89 @@ def send_pending_notifications(connection, webhook_url: str | None) -> tuple[int
     return sent, failed
 
 
-def main() -> None:
-    load_dotenv()
-    configure_logger()
-    logger.info("Mabimo notice run started")
-
-    notices = fetch_notice_list()
-    logger.info("Fetched notice count: %s", len(notices))
-    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
-
+def run_once(
+    *,
+    webhook_url: str | None = None,
+    board_sources: Sequence[BoardSource] = BOARD_SOURCES,
+) -> dict[str, int]:
+    logger.info("Mabimo board run started")
+    fetched_count = 0
+    new_count = 0
+    board_failed_count = 0
     with closing(connect()) as connection:
         initialize(connection)
-        # Store before sending so notification failures do not lose newly discovered posts.
-        new_posts = detect_and_store_new_posts(
-            connection,
-            notices,
-            board_type=BOARD_TYPE,
-        )
-        logger.info("New notice count: %s", len(new_posts))
+        for source in board_sources:
+            try:
+                posts = source.fetch()
+                fetched_count += len(posts)
+                logger.info(
+                    "Fetched board posts: board_type=%s count=%s",
+                    source.board_type,
+                    len(posts),
+                )
+                # Store before sending so notification failures do not lose newly discovered posts.
+                new_posts = detect_and_store_new_posts(
+                    connection,
+                    posts,
+                    board_type=source.board_type,
+                )
+                new_count += len(new_posts)
+                logger.info(
+                    "New board posts: board_type=%s count=%s",
+                    source.board_type,
+                    len(new_posts),
+                )
+            except Exception:
+                board_failed_count += 1
+                logger.exception(
+                    "Board source failed: board_type=%s",
+                    source.board_type,
+                )
+                continue
         sent, failed = send_pending_notifications(connection, webhook_url)
 
+    total_failed = board_failed_count + failed
     logger.info(
-        "Mabimo notice run finished: fetched=%s new=%s sent=%s failed=%s",
-        len(notices),
-        len(new_posts),
+        "Mabimo board run finished: fetched=%s new=%s sent=%s failed=%s",
+        fetched_count,
+        new_count,
         sent,
-        failed,
+        total_failed,
     )
+    return {
+        "fetched": fetched_count,
+        "new": new_count,
+        "sent": sent,
+        "failed": total_failed,
+    }
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = parse_args(argv)
+    load_dotenv()
+    configure_logger()
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+
+    if args.command == "run-once":
+        run_once(webhook_url=webhook_url)
+        return
+
+    scheduler = create_scheduler(
+        lambda: run_once(webhook_url=webhook_url),
+        interval_minutes=args.interval_minutes,
+    )
+    logger.info(
+        "Starting Mabimo scheduler: interval_minutes=%s",
+        args.interval_minutes,
+    )
+    scheduler.start()
+    try:
+        while True:
+            import time
+
+            time.sleep(3600)
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown()
 
 
 if __name__ == "__main__":

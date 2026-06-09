@@ -268,8 +268,8 @@ mabinogi-bot/
 
 ### 🏅 4단계: 자동화
 
-- [ ]  APScheduler 적용
-- [ ]  5~10분 주기 실행
+- [x]  APScheduler 적용
+- [x]  기본 5분 주기 실행
 
 ---
 
@@ -307,3 +307,24 @@ mabinogi-bot/
 - 작게 시작한다
 - 안정화 후 확장한다
 - 불필요한 기능은 뒤로 미룬다
+
+## 11. 실행 명령
+
+인자 없이 실행하면 기존 프로젝트 문맥과 같이 신규 글 감지를 1회 수행한다.
+
+```powershell
+python app/main.py
+python app/main.py run-once
+```
+
+자동 실행은 명시적으로 scheduler 명령을 사용한다. 기본 주기는 5분이며, 시작 직후 첫 작업도 같은 interval job으로 실행한다.
+
+```powershell
+python app/main.py scheduler
+python app/main.py scheduler --interval-minutes 5
+```
+
+## 12. 확장 리스크
+
+- 현재 DB는 `thread_id` 단일 primary key를 사용한다. 향후 업데이트, 이벤트, 확인 중인 문제 등 여러 게시판을 실제 수집할 때는 `(board_type, thread_id)` 기준 유니크 제약을 검토해야 한다.
+- 미등록 `board_type` 알림은 공지사항으로 조용히 둔갑하지 않고 실패로 집계된다. 스키마 변경 전까지는 pending 상태로 남아 재시도될 수 있으므로, 실제 게시판 추가 시 라벨 매핑을 먼저 등록해야 한다.
