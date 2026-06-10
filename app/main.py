@@ -19,7 +19,8 @@ from app.repositories.sqlite_repository import (
     connect,
     find_pending_notifications,
     initialize,
-    update_notified_at,
+    mark_delivery_failed,
+    mark_delivery_sent,
 )
 from app.services.diff_service import detect_and_store_new_posts
 from app.services.notifier_service import (
@@ -77,6 +78,14 @@ def send_pending_notifications(connection, webhook_url: str | None) -> tuple[int
     if not webhook_url:
         if pending_posts:
             logger.error("DISCORD_WEBHOOK_URL is not configured.")
+        attempted_at = datetime.now(timezone.utc).isoformat()
+        for post in pending_posts:
+            mark_delivery_failed(
+                connection,
+                post["delivery_id"],
+                attempted_at=attempted_at,
+                error_message="DISCORD_WEBHOOK_URL is not configured.",
+            )
         return 0, len(pending_posts)
 
     sent = 0
@@ -84,26 +93,52 @@ def send_pending_notifications(connection, webhook_url: str | None) -> tuple[int
     for post in pending_posts:
         thread_id = post["thread_id"]
         try:
-            send_discord_notification(webhook_url, post)
+            response_status_code = send_discord_notification(webhook_url, post)
         except DiscordNotificationError as exc:
             failed += 1
+            attempted_at = datetime.now(timezone.utc).isoformat()
+            mark_delivery_failed(
+                connection,
+                post["delivery_id"],
+                attempted_at=attempted_at,
+                error_message=str(exc),
+                response_status_code=exc.status_code,
+            )
             logger.error("Discord send failed for thread_id=%s: %s", thread_id, exc)
             continue
         except UnknownBoardTypeError as exc:
             failed += 1
+            attempted_at = datetime.now(timezone.utc).isoformat()
+            mark_delivery_failed(
+                connection,
+                post["delivery_id"],
+                attempted_at=attempted_at,
+                error_message=str(exc),
+            )
             logger.error("Discord message skipped for thread_id=%s: %s", thread_id, exc)
             continue
-        except Exception:
+        except Exception as exc:
             failed += 1
+            attempted_at = datetime.now(timezone.utc).isoformat()
+            mark_delivery_failed(
+                connection,
+                post["delivery_id"],
+                attempted_at=attempted_at,
+                error_message=exc.__class__.__name__,
+            )
             logger.exception(
                 "Discord send failed for thread_id=%s: unexpected error",
                 thread_id,
             )
             continue
 
-        # A post stays pending until Discord accepts it, so transient failures retry next run.
-        notified_at = datetime.now(timezone.utc).isoformat()
-        update_notified_at(connection, thread_id, notified_at)
+        sent_at = datetime.now(timezone.utc).isoformat()
+        mark_delivery_sent(
+            connection,
+            post["delivery_id"],
+            sent_at=sent_at,
+            response_status_code=response_status_code or 204,
+        )
         sent += 1
 
     logger.info("Discord notification summary: sent=%s failed=%s", sent, failed)
