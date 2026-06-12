@@ -232,6 +232,25 @@ def create_pending_delivery(
         connection.commit()
 
 
+def create_test_delivery(connection: sqlite3.Connection, *, message: str) -> int:
+    cursor = connection.execute(
+        """
+        INSERT INTO notification_deliveries (
+            notification_type,
+            channel_type,
+            status,
+            message
+        )
+        VALUES ('test', 'discord', 'pending', ?)
+        """,
+        (message,),
+    )
+    connection.commit()
+    delivery_id = int(cursor.lastrowid)
+    logger.info("Created test delivery: delivery_id=%s", delivery_id)
+    return delivery_id
+
+
 def mark_delivery_sent(
     connection: sqlite3.Connection,
     delivery_id: int,
@@ -280,6 +299,31 @@ def mark_delivery_failed(
     )
     connection.commit()
     logger.info("Recorded delivery failure: delivery_id=%s rows=%s", delivery_id, cursor.rowcount)
+
+
+def mark_delivery_failed_final(
+    connection: sqlite3.Connection,
+    delivery_id: int,
+    *,
+    attempted_at: str,
+    error_message: str,
+    response_status_code: int | None = None,
+) -> None:
+    cursor = connection.execute(
+        """
+        UPDATE notification_deliveries
+        SET
+            status = 'failed',
+            attempt_count = attempt_count + 1,
+            last_attempt_at = ?,
+            error_message = ?,
+            response_status_code = ?
+        WHERE id = ?
+        """,
+        (attempted_at, error_message, response_status_code, delivery_id),
+    )
+    connection.commit()
+    logger.info("Recorded final delivery failure: delivery_id=%s rows=%s", delivery_id, cursor.rowcount)
 
 
 def find_pending_notifications(connection: sqlite3.Connection) -> list[dict]:

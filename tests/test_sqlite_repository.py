@@ -7,10 +7,12 @@ from pathlib import Path
 
 from app.repositories.sqlite_repository import (
     create_pending_delivery,
+    create_test_delivery,
     connect,
     find_pending_notifications,
     initialize,
     insert_post,
+    mark_delivery_failed_final,
     mark_delivery_failed,
     mark_delivery_sent,
 )
@@ -328,6 +330,51 @@ class SqliteRepositoryTest(unittest.TestCase):
 
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["status"], "pending")
+
+    def test_create_test_delivery_does_not_insert_post(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                initialize(connection)
+                delivery_id = create_test_delivery(connection, message="test message")
+                mark_delivery_failed_final(
+                    connection,
+                    delivery_id,
+                    attempted_at="2026-06-02T00:01:00+00:00",
+                    error_message="manual test failed",
+                    response_status_code=500,
+                )
+
+                posts = connection.execute("SELECT * FROM posts").fetchall()
+                delivery = connection.execute(
+                    """
+                    SELECT
+                        notification_type,
+                        channel_type,
+                        status,
+                        board_type,
+                        thread_id,
+                        message,
+                        attempt_count,
+                        error_message,
+                        response_status_code
+                    FROM notification_deliveries
+                    WHERE id = ?
+                    """,
+                    (delivery_id,),
+                ).fetchone()
+
+        self.assertEqual(posts, [])
+        self.assertEqual(delivery["notification_type"], "test")
+        self.assertEqual(delivery["channel_type"], "discord")
+        self.assertEqual(delivery["status"], "failed")
+        self.assertIsNone(delivery["board_type"])
+        self.assertIsNone(delivery["thread_id"])
+        self.assertEqual(delivery["message"], "test message")
+        self.assertEqual(delivery["attempt_count"], 1)
+        self.assertEqual(delivery["error_message"], "manual test failed")
+        self.assertEqual(delivery["response_status_code"], 500)
 
     def test_find_pending_notifications_returns_only_pending_discord_new_posts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

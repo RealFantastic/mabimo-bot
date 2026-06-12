@@ -99,16 +99,29 @@ def send_discord_notification(webhook_url: str, post: dict) -> int:
         thread_id,
         len(message),
     )
+    return send_discord_message(
+        webhook_url,
+        message,
+        log_context=f"thread_id={thread_id}",
+    )
+
+
+def send_discord_message(
+    webhook_url: str,
+    message: str,
+    *,
+    log_context: str = "manual",
+) -> int:
     payload = {
-        "content": message,
+        "content": message[:DISCORD_CONTENT_LIMIT],
         # Prevent notice text from accidentally pinging Discord users or roles.
         "allowed_mentions": {"parse": []},
     }
 
     for attempt in range(2):
         logger.debug(
-            "Sending Discord notification: thread_id=%s attempt=%s",
-            thread_id,
+            "Sending Discord message: context=%s attempt=%s",
+            log_context,
             attempt + 1,
         )
         try:
@@ -119,8 +132,8 @@ def send_discord_notification(webhook_url: str, post: dict) -> int:
             )
             response.raise_for_status()
             logger.info(
-                "Discord notification sent: thread_id=%s status_code=%s",
-                thread_id,
+                "Discord message sent: context=%s status_code=%s",
+                log_context,
                 response.status_code,
             )
             return response.status_code
@@ -129,16 +142,16 @@ def send_discord_notification(webhook_url: str, post: dict) -> int:
             if response.status_code == 429 and attempt == 0:
                 retry_after = min(_retry_after_seconds(response), 30.0)
                 logger.warning(
-                    "Discord rate limit hit: thread_id=%s retry_after_seconds=%s",
-                    thread_id,
+                    "Discord rate limit hit: context=%s retry_after_seconds=%s",
+                    log_context,
                     retry_after,
                 )
                 time.sleep(retry_after)
                 continue
 
             logger.error(
-                "Discord webhook HTTP error: thread_id=%s status_code=%s",
-                thread_id,
+                "Discord webhook HTTP error: context=%s status_code=%s",
+                log_context,
                 response.status_code,
             )
             raise DiscordNotificationError(
@@ -147,8 +160,8 @@ def send_discord_notification(webhook_url: str, post: dict) -> int:
             ) from exc
         except httpx.RequestError as exc:
             logger.error(
-                "Discord webhook request error: thread_id=%s error_type=%s",
-                thread_id,
+                "Discord webhook request error: context=%s error_type=%s",
+                log_context,
                 exc.__class__.__name__,
             )
             raise DiscordNotificationError(

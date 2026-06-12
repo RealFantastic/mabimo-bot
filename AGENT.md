@@ -21,6 +21,22 @@ README, deep interview 결과, 구현 중 확정된 결정사항을 우선순위
 - 사용자가 만든 변경사항은 되돌리지 않는다.
 - 실행 산출물과 로컬 비밀값은 커밋 대상에서 제외한다.
 
+## 에이전트 워크플로우
+
+- 메인 Codex는 coordinator 역할을 맡고, 작업 분해, 순서 결정, 최종 통합 검토를 책임진다.
+- 구현 작업이 단순 기계 수정이 아니면 backend worker sub-agent에 위임한다.
+- backend worker는 `.codex/agents/worker-backend.md`를 따르며, TDD를 기본 절차로 사용한다.
+- 보안, 신뢰성, 아키텍처, PR 검증은 read-only explorer/reviewer sub-agent에 위임한다.
+- reviewer는 `.codex/agents/reviewer-security.md`를 따르며, 직접 파일을 수정하지 않는다.
+- coordinator는 구현 전에 다음 파일을 확인한다.
+  - `AGENT.md`
+  - `.codex/memories/mabimo-bot-agent-workflow.md`
+  - 관련 `.codex/agents/*.md`
+- coordinator는 worker가 소유한 구현을 동시에 중복 구현하지 않는다.
+- worker 작업 지시에는 담당 파일이나 모듈 범위를 명시한다.
+- worker 결과를 수락하기 전에 coordinator는 `git status --short --branch`, `git diff`, focused tests, broader verification을 확인한다.
+- secret, DB 파일, `.venv`, cache/build artifact, 관련 없는 파일이 변경 범위에 섞이지 않았는지 확인한다.
+
 ## 브랜치 전략
 
 - 기본 통합 브랜치는 `dev`이다.

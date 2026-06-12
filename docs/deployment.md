@@ -62,7 +62,12 @@ python app/main.py
 python app/main.py run-once
 ```
 
-테스트 발송 전용 CLI는 아직 정식으로 없다. 운영 검증 편의를 위해 후속 작업으로 `send-test` CLI를 추가하는 것이 좋다.
+Discord Webhook 연결만 확인해야 할 때는 테스트 발송 명령을 사용한다. 이 명령은 공식 게시글을 수집하지 않고, `posts`에도 데이터를 저장하지 않는다. 발송 이력은 `notification_deliveries`에 `notification_type='test'`로만 저장한다.
+
+```bash
+python app/main.py send-test
+python app/main.py send-test --message "운영 디스코드 웹훅 테스트"
+```
 
 ## Windows 배포 예시
 

@@ -17,8 +17,10 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.collectors.notice import fetch_notice_list
 from app.repositories.sqlite_repository import (
     connect,
+    create_test_delivery,
     find_pending_notifications,
     initialize,
+    mark_delivery_failed_final,
     mark_delivery_failed,
     mark_delivery_sent,
 )
@@ -26,6 +28,7 @@ from app.services.diff_service import detect_and_store_new_posts
 from app.services.notifier_service import (
     DiscordNotificationError,
     UnknownBoardTypeError,
+    send_discord_message,
     send_discord_notification,
 )
 from app.scheduler import DEFAULT_INTERVAL_MINUTES, create_scheduler
@@ -67,6 +70,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=positive_interval,
         default=DEFAULT_INTERVAL_MINUTES,
         help="Scheduler interval in minutes. Must be greater than 0.",
+    )
+    test_parser = subparsers.add_parser(
+        "send-test",
+        help="Send a Discord test message and record it as a test delivery.",
+    )
+    test_parser.add_argument(
+        "--message",
+        help="Custom test message content. Defaults to a generated connection check.",
     )
     parser.set_defaults(command="run-once", interval_minutes=DEFAULT_INTERVAL_MINUTES)
     return parser.parse_args(argv)
@@ -202,6 +213,84 @@ def run_once(
     }
 
 
+def build_test_message(message: str | None = None) -> str:
+    if message:
+        return message
+
+    sent_at = datetime.now(timezone.utc).isoformat()
+    return "\n".join(
+        [
+            "[마비모 알림봇 테스트]",
+            "",
+            "Discord Webhook 연결 확인 메시지입니다.",
+            f"발송 시각: {sent_at}",
+        ]
+    )
+
+
+def send_test_notification(
+    *,
+    webhook_url: str | None = None,
+    message: str | None = None,
+) -> dict[str, int]:
+    test_message = build_test_message(message)
+    with closing(connect()) as connection:
+        initialize(connection)
+        delivery_id = create_test_delivery(connection, message=test_message)
+
+        if not webhook_url:
+            attempted_at = datetime.now(timezone.utc).isoformat()
+            mark_delivery_failed_final(
+                connection,
+                delivery_id,
+                attempted_at=attempted_at,
+                error_message="DISCORD_WEBHOOK_URL is not configured.",
+            )
+            logger.error("DISCORD_WEBHOOK_URL is not configured.")
+            return {"sent": 0, "failed": 1}
+
+        try:
+            response_status_code = send_discord_message(
+                webhook_url,
+                test_message,
+                log_context=f"test_delivery_id={delivery_id}",
+            )
+        except DiscordNotificationError as exc:
+            attempted_at = datetime.now(timezone.utc).isoformat()
+            mark_delivery_failed_final(
+                connection,
+                delivery_id,
+                attempted_at=attempted_at,
+                error_message=str(exc),
+                response_status_code=exc.status_code,
+            )
+            logger.error("Discord test send failed: delivery_id=%s %s", delivery_id, exc)
+            return {"sent": 0, "failed": 1}
+        except Exception as exc:
+            attempted_at = datetime.now(timezone.utc).isoformat()
+            mark_delivery_failed_final(
+                connection,
+                delivery_id,
+                attempted_at=attempted_at,
+                error_message=exc.__class__.__name__,
+            )
+            logger.exception(
+                "Discord test send failed: delivery_id=%s unexpected error",
+                delivery_id,
+            )
+            return {"sent": 0, "failed": 1}
+
+        sent_at = datetime.now(timezone.utc).isoformat()
+        mark_delivery_sent(
+            connection,
+            delivery_id,
+            sent_at=sent_at,
+            response_status_code=response_status_code or 204,
+        )
+        logger.info("Discord test notification sent: delivery_id=%s", delivery_id)
+        return {"sent": 1, "failed": 0}
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
     load_dotenv()
@@ -210,6 +299,15 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     if args.command == "run-once":
         run_once(webhook_url=webhook_url)
+        return
+
+    if args.command == "send-test":
+        summary = send_test_notification(
+            webhook_url=webhook_url,
+            message=args.message,
+        )
+        if summary["failed"]:
+            sys.exit(1)
         return
 
     scheduler = create_scheduler(
