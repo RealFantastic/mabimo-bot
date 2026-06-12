@@ -62,10 +62,10 @@ def format_post_message(post: dict) -> str:
     except KeyError as exc:
         raise UnknownBoardTypeError(f"Unknown board_type: {board_type}") from exc
 
-    title_line = f"[{label}] {post['title']}"
+    title_line = f"📢[{label}] {post['title']}"
     category_line = f"분류: {post.get('category', '')}"
     published_at_line = f"작성일: {post.get('published_at', '')}"
-    url_line = f"링크: {post['url']}"
+    url_line = f"🔗 원문: {post['url']}"
     return _format_with_content_limit(
         title_line=title_line,
         metadata_lines=[category_line, published_at_line],
