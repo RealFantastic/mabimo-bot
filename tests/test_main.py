@@ -4,7 +4,13 @@ from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from app.main import BoardSource, parse_args, run_once, send_pending_notifications
+from app.main import (
+    BoardSource,
+    parse_args,
+    run_once,
+    send_pending_notifications,
+    send_test_notification,
+)
 from app.repositories.sqlite_repository import (
     connect,
     find_pending_notifications,
@@ -94,6 +100,13 @@ class MainTest(unittest.TestCase):
         self.assertEqual(parse_args([]).command, "run-once")
         self.assertEqual(parse_args(["run-once"]).command, "run-once")
         self.assertEqual(parse_args(["scheduler"]).command, "scheduler")
+        self.assertEqual(parse_args(["send-test"]).command, "send-test")
+
+    def test_parse_args_accepts_send_test_message(self) -> None:
+        args = parse_args(["send-test", "--message", "hello"])
+
+        self.assertEqual(args.command, "send-test")
+        self.assertEqual(args.message, "hello")
 
     def test_parse_args_rejects_invalid_interval_without_traceback(self) -> None:
         with self.assertRaises(SystemExit) as raised:
@@ -182,6 +195,105 @@ class MainTest(unittest.TestCase):
             self.assertEqual(pending[0]["status"], "pending")
             self.assertEqual(pending[0]["attempt_count"], 1)
             self.assertEqual(pending[0]["error_message"], "DISCORD_WEBHOOK_URL is not configured.")
+
+    def test_send_test_notification_records_test_delivery_without_post(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with patch.dict("os.environ", {"MABIMO_DB_PATH": str(db_path)}):
+                with patch("app.main.send_discord_message", return_value=204) as send:
+                    summary = send_test_notification(
+                        webhook_url="https://discord.example/hook",
+                        message="test message",
+                    )
+
+                with closing(connect(db_path)) as connection:
+                    posts = connection.execute("SELECT * FROM posts").fetchall()
+                    delivery = connection.execute(
+                        """
+                        SELECT
+                            notification_type,
+                            channel_type,
+                            status,
+                            board_type,
+                            thread_id,
+                            message,
+                            attempt_count,
+                            sent_at,
+                            response_status_code
+                        FROM notification_deliveries
+                        """
+                    ).fetchone()
+
+        self.assertEqual(summary, {"sent": 1, "failed": 0})
+        send.assert_called_once_with(
+            "https://discord.example/hook",
+            "test message",
+            log_context="test_delivery_id=1",
+        )
+        self.assertEqual(posts, [])
+        self.assertEqual(delivery["notification_type"], "test")
+        self.assertEqual(delivery["channel_type"], "discord")
+        self.assertEqual(delivery["status"], "sent")
+        self.assertIsNone(delivery["board_type"])
+        self.assertIsNone(delivery["thread_id"])
+        self.assertEqual(delivery["message"], "test message")
+        self.assertEqual(delivery["attempt_count"], 1)
+        self.assertIsNotNone(delivery["sent_at"])
+        self.assertEqual(delivery["response_status_code"], 204)
+
+    def test_send_test_notification_without_webhook_records_final_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with patch.dict("os.environ", {"MABIMO_DB_PATH": str(db_path)}):
+                summary = send_test_notification(webhook_url=None, message="test message")
+
+                with closing(connect(db_path)) as connection:
+                    delivery = connection.execute(
+                        """
+                        SELECT status, attempt_count, error_message
+                        FROM notification_deliveries
+                        """
+                    ).fetchone()
+
+        self.assertEqual(summary, {"sent": 0, "failed": 1})
+        self.assertEqual(delivery["status"], "failed")
+        self.assertEqual(delivery["attempt_count"], 1)
+        self.assertEqual(delivery["error_message"], "DISCORD_WEBHOOK_URL is not configured.")
+
+    def test_send_test_notification_discord_error_records_final_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with patch.dict("os.environ", {"MABIMO_DB_PATH": str(db_path)}):
+                with patch(
+                    "app.main.send_discord_message",
+                    side_effect=DiscordNotificationError("Discord webhook returned HTTP 500", status_code=500),
+                ) as send:
+                    summary = send_test_notification(
+                        webhook_url="https://discord.example/hook",
+                        message="test message",
+                    )
+
+                with closing(connect(db_path)) as connection:
+                    delivery = connection.execute(
+                        """
+                        SELECT status, attempt_count, error_message, response_status_code
+                        FROM notification_deliveries
+                        """
+                    ).fetchone()
+
+        self.assertEqual(summary, {"sent": 0, "failed": 1})
+        send.assert_called_once_with(
+            "https://discord.example/hook",
+            "test message",
+            log_context="test_delivery_id=1",
+        )
+        self.assertEqual(delivery["status"], "failed")
+        self.assertEqual(delivery["attempt_count"], 1)
+        self.assertEqual(delivery["error_message"], "Discord webhook returned HTTP 500")
+        self.assertEqual(delivery["response_status_code"], 500)
 
 
 def _post(thread_id: str = "123") -> dict:

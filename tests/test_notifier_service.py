@@ -8,6 +8,7 @@ from app.services.notifier_service import (
     UnknownBoardTypeError,
     format_notice_message,
     format_post_message,
+    send_discord_message,
     send_discord_notification,
 )
 
@@ -21,6 +22,20 @@ class NotifierServiceTest(unittest.TestCase):
             send_discord_notification("https://discord.example/webhook/token", _post())
 
         payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["allowed_mentions"], {"parse": []})
+
+    def test_plain_discord_message_payload_disables_mentions(self) -> None:
+        request = httpx.Request("POST", "https://discord.example/webhook/token")
+        response = httpx.Response(204, request=request)
+
+        with patch("app.services.notifier_service.httpx.post", return_value=response) as post:
+            send_discord_message(
+                "https://discord.example/webhook/token",
+                "@everyone test",
+            )
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["content"], "@everyone test")
         self.assertEqual(payload["allowed_mentions"], {"parse": []})
 
     def test_http_error_message_does_not_include_webhook_url(self) -> None:
