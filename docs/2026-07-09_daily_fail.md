@@ -10,3 +10,5 @@
   - 이후 README/AGENT 문구를 현재 동작에 맞게 정리했다.
 - 최초 `git merge --no-ff feature/event-board-alerts` 실행은 `.git/ORIG_HEAD.lock` 생성 권한 문제로 실패했다.
   - 승인된 권한으로 같은 병합 명령을 다시 실행해 성공했다.
+- 최초 `git merge --no-ff dev` 실행은 `.git/ORIG_HEAD.lock` 생성 권한 문제로 실패했다.
+  - 승인된 권한으로 같은 병합 명령을 다시 실행해 성공했다.
