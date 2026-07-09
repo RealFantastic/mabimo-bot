@@ -35,3 +35,8 @@
   - `.\.venv\Scripts\python.exe -m unittest discover -s tests`
   - 결과: 46 tests OK
   - `.\.venv\Scripts\python.exe -m compileall app tests`
+- `dev`를 `main`에 병합했다.
+- `main` 병합 후 최종 검증이 통과했다.
+  - `.\.venv\Scripts\python.exe -m unittest discover -s tests`
+  - 결과: 46 tests OK
+  - `.\.venv\Scripts\python.exe -m compileall app tests`
