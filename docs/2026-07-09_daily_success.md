@@ -28,3 +28,5 @@
   - `.\.venv\Scripts\python.exe -m unittest discover -s tests`
   - 결과: 46 tests OK
   - `.\.venv\Scripts\python.exe -m compileall app tests`
+- 원격 `origin/dev`에 push가 성공했다.
+  - 범위: `a104ae6..2eb4ddd`
