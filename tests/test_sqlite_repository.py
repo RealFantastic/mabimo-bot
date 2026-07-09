@@ -9,6 +9,7 @@ from app.repositories.sqlite_repository import (
     create_pending_delivery,
     create_test_delivery,
     connect,
+    find_existing_thread_ids,
     find_pending_notifications,
     initialize,
     insert_post,
@@ -43,6 +44,94 @@ class SqliteRepositoryTest(unittest.TestCase):
                     "first_seen_at",
                 ],
             )
+
+    def test_posts_identity_allows_same_thread_id_on_different_boards(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                initialize(connection)
+                insert_post(
+                    connection,
+                    _post(),
+                    board_type="notice",
+                    first_seen_at="2026-06-02T00:00:00+00:00",
+                )
+                insert_post(
+                    connection,
+                    _post(title="event title", url="https://example.com/event/123"),
+                    board_type="event",
+                    first_seen_at="2026-06-02T00:01:00+00:00",
+                )
+
+                rows = connection.execute(
+                    """
+                    SELECT board_type, thread_id, title
+                    FROM posts
+                    ORDER BY board_type
+                    """
+                ).fetchall()
+                pending = find_pending_notifications(connection)
+
+            self.assertEqual(
+                [dict(row) for row in rows],
+                [
+                    {"board_type": "event", "thread_id": "123", "title": "event title"},
+                    {"board_type": "notice", "thread_id": "123", "title": "notice title"},
+                ],
+            )
+            self.assertEqual(
+                [(delivery["board_type"], delivery["thread_id"]) for delivery in pending],
+                [("notice", "123"), ("event", "123")],
+            )
+
+    def test_posts_identity_rejects_duplicate_thread_id_within_same_board(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                initialize(connection)
+                insert_post(
+                    connection,
+                    _post(),
+                    board_type="notice",
+                    first_seen_at="2026-06-02T00:00:00+00:00",
+                )
+
+                with self.assertRaises(sqlite3.IntegrityError):
+                    insert_post(
+                        connection,
+                        _post(title="duplicate notice title"),
+                        board_type="notice",
+                        first_seen_at="2026-06-02T00:01:00+00:00",
+                    )
+
+    def test_find_existing_thread_ids_is_board_aware(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                initialize(connection)
+                insert_post(
+                    connection,
+                    _post(),
+                    board_type="notice",
+                    first_seen_at="2026-06-02T00:00:00+00:00",
+                )
+
+                notice_existing = find_existing_thread_ids(
+                    connection,
+                    ["123"],
+                    board_type="notice",
+                )
+                event_existing = find_existing_thread_ids(
+                    connection,
+                    ["123"],
+                    board_type="event",
+                )
+
+            self.assertEqual(notice_existing, {"123"})
+            self.assertEqual(event_existing, set())
 
     def test_failed_notification_remains_pending_until_marked_sent(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -131,6 +220,100 @@ class SqliteRepositoryTest(unittest.TestCase):
                 pending = find_pending_notifications(connection)
 
             self.assertEqual(pending[0]["thread_id"], "123")
+
+    def test_initialize_migrates_legacy_posts_to_board_aware_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE posts (
+                        thread_id TEXT PRIMARY KEY,
+                        board_type TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        category TEXT,
+                        published_at TEXT,
+                        url TEXT NOT NULL,
+                        first_seen_at TEXT NOT NULL,
+                        notified_at TEXT
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    INSERT INTO posts (
+                        thread_id,
+                        board_type,
+                        title,
+                        category,
+                        published_at,
+                        url,
+                        first_seen_at,
+                        notified_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "123",
+                        "notice",
+                        "legacy notice",
+                        "notice",
+                        "2026-06-02",
+                        "https://example.com/notice/123",
+                        "2026-06-02T00:00:00+00:00",
+                        "2026-06-02T00:01:00+00:00",
+                    ),
+                )
+                connection.commit()
+
+                initialize(connection)
+                insert_post(
+                    connection,
+                    _post(title="event title", url="https://example.com/event/123"),
+                    board_type="event",
+                    first_seen_at="2026-06-02T00:02:00+00:00",
+                )
+
+                posts = connection.execute(
+                    """
+                    SELECT board_type, thread_id, title
+                    FROM posts
+                    ORDER BY board_type
+                    """
+                ).fetchall()
+                deliveries = connection.execute(
+                    """
+                    SELECT board_type, thread_id, status, sent_at
+                    FROM notification_deliveries
+                    ORDER BY board_type
+                    """
+                ).fetchall()
+
+            self.assertEqual(
+                [dict(row) for row in posts],
+                [
+                    {"board_type": "event", "thread_id": "123", "title": "event title"},
+                    {"board_type": "notice", "thread_id": "123", "title": "legacy notice"},
+                ],
+            )
+            self.assertEqual(
+                [dict(row) for row in deliveries],
+                [
+                    {
+                        "board_type": "event",
+                        "thread_id": "123",
+                        "status": "pending",
+                        "sent_at": None,
+                    },
+                    {
+                        "board_type": "notice",
+                        "thread_id": "123",
+                        "status": "sent",
+                        "sent_at": "2026-06-02T00:01:00+00:00",
+                    },
+                ],
+            )
 
     def test_initialize_backfills_legacy_notified_at_idempotently(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -490,13 +673,17 @@ class SqliteRepositoryTest(unittest.TestCase):
                             )
 
 
-def _post() -> dict:
+def _post(
+    *,
+    title: str = "notice title",
+    url: str = "https://example.com/notice/123",
+) -> dict:
     return {
         "thread_id": "123",
-        "title": "notice title",
+        "title": title,
         "category": "notice",
         "published_at": "2026-06-02",
-        "url": "https://example.com/notice/123",
+        "url": url,
     }
 
 

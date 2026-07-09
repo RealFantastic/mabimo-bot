@@ -46,6 +46,63 @@ class DiffServiceTest(unittest.TestCase):
                 self.assertEqual(pending_by_id["new"]["channel_type"], "discord")
                 self.assertEqual(pending_by_id["existing"]["url"], "https://example.com/existing")
 
+    def test_detect_and_store_new_posts_treats_same_thread_id_on_other_board_as_new(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                initialize(connection)
+                insert_post(
+                    connection,
+                    _post(thread_id="same", url="https://example.com/notice/same"),
+                    board_type="notice",
+                    first_seen_at="2026-06-02T00:00:00+00:00",
+                )
+
+                new_posts = detect_and_store_new_posts(
+                    connection,
+                    [_post(thread_id="same", url="https://example.com/event/same")],
+                    board_type="event",
+                )
+
+                pending = find_pending_notifications(connection)
+
+            self.assertEqual([post["thread_id"] for post in new_posts], ["same"])
+            self.assertEqual(
+                [(delivery["board_type"], delivery["thread_id"], delivery["url"]) for delivery in pending],
+                [
+                    ("notice", "same", "https://example.com/notice/same"),
+                    ("event", "same", "https://example.com/event/same"),
+                ],
+            )
+
+    def test_detect_and_store_new_posts_dedupes_duplicate_thread_id_in_same_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "mabimo.db"
+
+            with closing(connect(db_path)) as connection:
+                initialize(connection)
+
+                new_posts = detect_and_store_new_posts(
+                    connection,
+                    [
+                        _post(thread_id="duplicate", url="https://example.com/event/first"),
+                        _post(thread_id="duplicate", url="https://example.com/event/second"),
+                    ],
+                    board_type="event",
+                )
+
+                pending = find_pending_notifications(connection)
+
+            self.assertEqual(
+                [(post["thread_id"], post["url"]) for post in new_posts],
+                [("duplicate", "https://example.com/event/first")],
+            )
+            self.assertEqual(
+                [(delivery["board_type"], delivery["thread_id"], delivery["url"]) for delivery in pending],
+                [("event", "duplicate", "https://example.com/event/first")],
+            )
+
 
 def _post(*, thread_id: str, url: str) -> dict:
     return {

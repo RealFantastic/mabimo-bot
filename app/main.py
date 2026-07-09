@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from app.collectors.event import fetch_event_list
 from app.collectors.notice import fetch_notice_list
 from app.repositories.sqlite_repository import (
     connect,
@@ -35,7 +36,6 @@ from app.scheduler import DEFAULT_INTERVAL_MINUTES, create_scheduler
 from app.utils.logger import configure_logger, get_logger
 
 
-BOARD_TYPE = "notice"
 logger = get_logger(__name__)
 
 
@@ -46,7 +46,8 @@ class BoardSource:
 
 
 BOARD_SOURCES: tuple[BoardSource, ...] = (
-    BoardSource(board_type=BOARD_TYPE, fetch=fetch_notice_list),
+    BoardSource(board_type="notice", fetch=fetch_notice_list),
+    BoardSource(board_type="event", fetch=fetch_event_list),
 )
 
 

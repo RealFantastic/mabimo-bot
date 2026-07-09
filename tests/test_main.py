@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from app.main import (
+    BOARD_SOURCES,
     BoardSource,
     parse_args,
     run_once,
@@ -21,6 +22,12 @@ from app.services.notifier_service import DiscordNotificationError
 
 
 class MainTest(unittest.TestCase):
+    def test_default_run_once_sources_include_notice_and_event_boards(self) -> None:
+        self.assertEqual(
+            [source.board_type for source in BOARD_SOURCES],
+            ["notice", "event"],
+        )
+
     def test_run_once_calls_existing_detection_flow_for_manual_execution(self) -> None:
         connection = Mock()
         collector = Mock(return_value=[_post()])
