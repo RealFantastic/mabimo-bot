@@ -30,3 +30,8 @@
   - `.\.venv\Scripts\python.exe -m compileall app tests`
 - 원격 `origin/dev`에 push가 성공했다.
   - 범위: `a104ae6..2eb4ddd`
+- Git Flow 기반 브랜치 전략을 `AGENT.md`에 반영했다.
+- `main` 운영 반영 전 `dev` 검증이 통과했다.
+  - `.\.venv\Scripts\python.exe -m unittest discover -s tests`
+  - 결과: 46 tests OK
+  - `.\.venv\Scripts\python.exe -m compileall app tests`

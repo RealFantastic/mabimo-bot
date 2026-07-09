@@ -20,7 +20,9 @@
 - `feature/event-board-alerts` 변경사항을 커밋했다.
 - `feature/event-board-alerts`를 `dev`에 병합했다.
 - 병합된 `dev` 브랜치를 원격 `origin/dev`에 push했다.
+- `main`은 운영용, `dev`는 개발 통합용으로 사용하는 브랜치 역할을 재정의했다.
+- Git Flow 기반 브랜치 전략을 `AGENT.md`에 명시했다.
 
 ## 다음 작업
 
-- 원격 `dev` 최종 상태와 워킹트리가 깨끗한지 확인한다.
+- `dev` 전체 검증 후 `main`에 운영 반영한다.
