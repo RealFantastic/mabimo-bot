@@ -17,8 +17,10 @@
 - 이벤트 수집, 게시판별 중복 감지, DB 마이그레이션, 알림 포맷, 테스트 커버리지를 대조했다.
 - README와 AGENT의 알림/데이터 필드 설명을 이벤트 기간 표시 동작에 맞춰 정리했다.
 - 현재 변경사항을 `dev`에 반영하기 위해 최종 검증을 실행했다.
+- `feature/event-board-alerts` 변경사항을 커밋했다.
+- `feature/event-board-alerts`를 `dev`에 병합했다.
 
 ## 다음 작업
 
 - 커밋 전 `git diff`와 커밋 제외 대상 파일을 확인한다.
-- 이상 없으면 `feature/event-board-alerts`를 커밋하고 `dev`에 병합한다.
+- `dev` 병합 후 최종 검증과 원격 반영 상태를 확인한다.

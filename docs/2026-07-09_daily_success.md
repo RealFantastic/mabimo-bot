@@ -21,3 +21,10 @@
   - `.\.venv\Scripts\python.exe -m unittest discover -s tests`
   - 결과: 46 tests OK
   - `.\.venv\Scripts\python.exe -m compileall app tests`
+- `feature/event-board-alerts` 커밋을 생성했다.
+  - 커밋: `dc60f2e Add event board alerts`
+- `feature/event-board-alerts`를 `dev`에 병합했다.
+- `dev` 병합 후 최종 검증이 통과했다.
+  - `.\.venv\Scripts\python.exe -m unittest discover -s tests`
+  - 결과: 46 tests OK
+  - `.\.venv\Scripts\python.exe -m compileall app tests`
