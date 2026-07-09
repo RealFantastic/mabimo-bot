@@ -105,6 +105,54 @@ class NotifierServiceTest(unittest.TestCase):
 
         self.assertIn("[업데이트]", message)
 
+    def test_format_event_post_message_omits_empty_published_at(self) -> None:
+        message = format_post_message(
+            {
+                **_post(),
+                "board_type": "event",
+                "category": "진행중",
+                "published_at": "",
+            }
+        )
+
+        self.assertEqual(
+            message,
+            "\n".join(
+                [
+                    "📢[이벤트] @everyone notice",
+                    "",
+                    "분류: 진행중",
+                    "🔗 원문: https://example.com/notice/123",
+                ]
+            ),
+        )
+        self.assertNotIn("작성일:", message)
+        self.assertNotIn("기간:", message)
+
+    def test_format_event_post_message_labels_published_at_as_period(self) -> None:
+        message = format_post_message(
+            {
+                **_post(),
+                "board_type": "event",
+                "category": "진행중",
+                "published_at": "2026.7.2(목) 점검 후 ~ 2026.7.16(목) 오전 5시 59분까지",
+            }
+        )
+
+        self.assertEqual(
+            message,
+            "\n".join(
+                [
+                    "📢[이벤트] @everyone notice",
+                    "",
+                    "분류: 진행중",
+                    "기간: 2026.7.2(목) 점검 후 ~ 2026.7.16(목) 오전 5시 59분까지",
+                    "🔗 원문: https://example.com/notice/123",
+                ]
+            ),
+        )
+        self.assertNotIn("작성일:", message)
+
     def test_unknown_board_type_is_not_silently_labeled_as_notice(self) -> None:
         with self.assertRaises(UnknownBoardTypeError):
             format_post_message({**_post(), "board_type": "unregistered"})

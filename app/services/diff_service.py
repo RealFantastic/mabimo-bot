@@ -15,9 +15,18 @@ def detect_and_store_new_posts(
     board_type: str,
 ) -> list[dict]:
     existing_ids = find_existing_thread_ids(
-        connection, (post["thread_id"] for post in posts)
+        connection,
+        (post["thread_id"] for post in posts),
+        board_type=board_type,
     )
-    new_posts = [post for post in posts if post["thread_id"] not in existing_ids]
+    seen_new_ids = set()
+    new_posts = []
+    for post in posts:
+        thread_id = post["thread_id"]
+        if thread_id in existing_ids or thread_id in seen_new_ids:
+            continue
+        seen_new_ids.add(thread_id)
+        new_posts.append(post)
     logger.info(
         "Post diff complete: input=%s existing=%s new=%s board_type=%s",
         len(posts),

@@ -64,11 +64,15 @@ def format_post_message(post: dict) -> str:
 
     title_line = f"📢[{label}] {post['title']}"
     category_line = f"분류: {post.get('category', '')}"
-    published_at_line = f"작성일: {post.get('published_at', '')}"
+    metadata_lines = [category_line]
+    published_at = post.get("published_at", "")
+    if published_at:
+        date_label = "기간" if board_type == "event" else "작성일"
+        metadata_lines.append(f"{date_label}: {published_at}")
     url_line = f"🔗 원문: {post['url']}"
     return _format_with_content_limit(
         title_line=title_line,
-        metadata_lines=[category_line, published_at_line],
+        metadata_lines=metadata_lines,
         url_line=url_line,
     )
 

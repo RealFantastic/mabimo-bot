@@ -21,19 +21,8 @@ def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
 
 def initialize(connection: sqlite3.Connection) -> None:
     logger.info("Initializing SQLite schema")
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS posts (
-            thread_id TEXT PRIMARY KEY,
-            board_type TEXT NOT NULL,
-            title TEXT NOT NULL,
-            category TEXT,
-            published_at TEXT,
-            url TEXT NOT NULL,
-            first_seen_at TEXT NOT NULL
-        )
-        """
-    )
+    _create_posts_table(connection)
+    _migrate_posts_to_board_thread_identity(connection)
     # notification_deliveries records each notification send attempt without a
     # strong posts FK because test sends may not map to a real post.
     #
@@ -99,8 +88,75 @@ def initialize(connection: sqlite3.Connection) -> None:
     logger.info("SQLite schema initialization complete")
 
 
+def _create_posts_table(
+    connection: sqlite3.Connection, *, include_notified_at: bool = False
+) -> None:
+    notified_at_column = ",\n            notified_at TEXT" if include_notified_at else ""
+    connection.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS posts (
+            thread_id TEXT NOT NULL,
+            board_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            category TEXT,
+            published_at TEXT,
+            url TEXT NOT NULL,
+            first_seen_at TEXT NOT NULL{notified_at_column},
+            PRIMARY KEY (board_type, thread_id)
+        )
+        """
+    )
+
+
+def _posts_columns(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+    return connection.execute("PRAGMA table_info(posts)").fetchall()
+
+
+def _posts_has_board_thread_primary_key(connection: sqlite3.Connection) -> bool:
+    primary_key_columns = sorted(
+        ((row["pk"], row["name"]) for row in _posts_columns(connection) if row["pk"]),
+        key=lambda item: item[0],
+    )
+    return primary_key_columns == [(1, "board_type"), (2, "thread_id")]
+
+
+def _migrate_posts_to_board_thread_identity(connection: sqlite3.Connection) -> None:
+    if _posts_has_board_thread_primary_key(connection):
+        return
+
+    columns = _posts_columns(connection)
+    column_names = {row["name"] for row in columns}
+    include_notified_at = "notified_at" in column_names
+    logger.info("Migrating posts schema to board-aware identity")
+
+    connection.execute("ALTER TABLE posts RENAME TO posts_legacy_thread_id_identity")
+    _create_posts_table(connection, include_notified_at=include_notified_at)
+
+    insert_columns = [
+        "thread_id",
+        "board_type",
+        "title",
+        "category",
+        "published_at",
+        "url",
+        "first_seen_at",
+    ]
+    if include_notified_at:
+        insert_columns.append("notified_at")
+
+    columns_sql = ", ".join(insert_columns)
+    connection.execute(
+        f"""
+        INSERT OR IGNORE INTO posts ({columns_sql})
+        SELECT {columns_sql}
+        FROM posts_legacy_thread_id_identity
+        """
+    )
+    connection.execute("DROP TABLE posts_legacy_thread_id_identity")
+
+
 def _posts_has_notified_at(connection: sqlite3.Connection) -> bool:
-    columns = connection.execute("PRAGMA table_info(posts)").fetchall()
+    columns = _posts_columns(connection)
     return any(row["name"] == "notified_at" for row in columns)
 
 
@@ -140,7 +196,7 @@ def _backfill_legacy_post_notifications(connection: sqlite3.Connection) -> None:
 
 
 def find_existing_thread_ids(
-    connection: sqlite3.Connection, thread_ids: Iterable[str]
+    connection: sqlite3.Connection, thread_ids: Iterable[str], *, board_type: str
 ) -> set[str]:
     ids = list(thread_ids)
     if not ids:
@@ -149,14 +205,20 @@ def find_existing_thread_ids(
 
     placeholders = ",".join("?" for _ in ids)
     rows = connection.execute(
-        f"SELECT thread_id FROM posts WHERE thread_id IN ({placeholders})",
-        ids,
+        f"""
+        SELECT thread_id
+        FROM posts
+        WHERE board_type = ?
+            AND thread_id IN ({placeholders})
+        """,
+        [board_type, *ids],
     ).fetchall()
     existing_ids = {row["thread_id"] for row in rows}
     logger.debug(
-        "Existing thread ID lookup complete: requested=%s matched=%s",
+        "Existing thread ID lookup complete: requested=%s matched=%s board_type=%s",
         len(ids),
         len(existing_ids),
+        board_type,
     )
     return existing_ids
 

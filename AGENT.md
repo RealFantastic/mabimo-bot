@@ -18,8 +18,21 @@ README, deep interview 결과, 구현 중 확정된 결정사항을 우선순위
 - 현재 단계의 명확한 범위를 벗어나는 기능은 임의로 구현하지 않는다.
 - 기존 코드 구조와 README의 의도를 우선한다.
 - 구현 전에 현재 브랜치와 변경 상태를 확인한다.
+- 작업 전에는 오늘 날짜의 데일리 로그 파일이 있는지 확인한다.
 - 사용자가 만든 변경사항은 되돌리지 않는다.
 - 실행 산출물과 로컬 비밀값은 커밋 대상에서 제외한다.
+
+## 데일리 로그 기준
+
+- 작업일별 로그는 `docs/` 아래 Markdown 파일로 기록한다.
+- 파일명은 다음 세 가지로 분리한다.
+  - `yyyy-mm-dd_daily_work.md`: 진행한 작업과 다음 작업
+  - `yyyy-mm-dd_daily_success.md`: 성공한 내용과 검증 결과
+  - `yyyy-mm-dd_daily_fail.md`: 실패하거나 막힌 내용과 후속 처리
+- 작업 전에는 해당 날짜의 세 로그 파일 존재 여부와 기존 내용을 확인한다.
+- 작업 후에는 실제로 진행한 내용, 성공한 검증, 실패나 차단 사항을 각각 알맞은 파일에 추가한다.
+- 테스트 실패, 샌드박스/네트워크 제한, 승인 필요로 중단된 명령도 실패 로그에 남긴다.
+- 사용자가 로그 기록 방식을 바꾸면 이 섹션과 기존 로그 파일 구조를 함께 갱신한다.
 
 ## 에이전트 워크플로우
 
@@ -47,18 +60,19 @@ README, deep interview 결과, 구현 중 확정된 결정사항을 우선순위
 - `main`은 직접 작업 브랜치로 사용하지 않는다.
 - 커밋 전에는 `git status --short`로 변경 범위를 확인한다.
 
-## 현재 확정된 1차 MVP
+## 현재 구현 범위
 
-1차 MVP는 공지사항 게시판만 대상으로 한다.
+현재 기본 수집 대상은 공지사항과 이벤트 게시판이다.
 
 ### 포함 범위
 
 - `공지사항` 게시판 목록 수집
+- `이벤트` 게시판 목록 수집
 - 최신 N개 게시글 확보
-- `thread_id` 기준 신규 글 판정
+- `(board_type, thread_id)` 기준 신규 글 판정
 - SQLite 저장
 - Discord Webhook 알림
-- 수동 1회 실행
+- 수동 1회 실행 및 APScheduler 주기 실행
 - 실행 결과 집계 출력
 
 ### 제외 범위
@@ -69,8 +83,7 @@ README, deep interview 결과, 구현 중 확정된 결정사항을 우선순위
 - 기존 글의 `(추가)`, `(완료)` 등 제목 변경 감지
 - 기존 글의 본문 변경 감지
 - 게시글 버저닝
-- 업데이트/이벤트 게시판 수집
-- APScheduler 주기 실행
+- 업데이트 게시판 수집
 - Discord slash command 또는 사용자 인터랙션
 - 관리자 기능
 
@@ -78,7 +91,7 @@ README, deep interview 결과, 구현 중 확정된 결정사항을 우선순위
 
 ### 1차: 공지사항 수동 알림 MVP
 
-공지사항 목록 수집, `thread_id` 신규 감지, SQLite 저장, Discord Webhook 전송,
+공지사항 목록 수집, `(board_type, thread_id)` 신규 감지, SQLite 저장, Discord Webhook 전송,
 수동 실행 1회 흐름을 완성한다.
 
 ### 2차: 자동화
@@ -103,20 +116,22 @@ APScheduler를 붙여 5~10분 주기로 자동 실행한다.
 `notification_deliveries`가 관리한다.
 
 ```text
-thread_id     TEXT PRIMARY KEY
+thread_id     TEXT NOT NULL
 board_type    TEXT NOT NULL
 title         TEXT NOT NULL
 category      TEXT
 published_at  TEXT
 url           TEXT NOT NULL
 first_seen_at TEXT NOT NULL
+PRIMARY KEY (board_type, thread_id)
 ```
 
 필드 의미:
 
-- `thread_id`: 공식 사이트 게시글 ID이며 1차 MVP의 신규 판정 기준이다.
-- `board_type`: 1차 MVP에서는 `notice`를 사용한다.
-- `published_at`: 공식 사이트에 표시된 작성일자이다.
+- `thread_id`: 공식 사이트 게시글 ID이다.
+- `board_type`: 게시판 종류이며 현재 `notice`, `event`를 사용한다.
+- `(board_type, thread_id)`: 게시판별 신규 판정 기준이다.
+- `published_at`: 공식 사이트 목록에 표시된 날짜/기간 값이다. 공지사항은 작성일, 이벤트는 이벤트 기간을 저장한다.
 - `first_seen_at`: 봇이 해당 게시글을 처음 발견한 시각이다.
 
 알림 발송 테이블은 `notification_deliveries`이다.
@@ -146,7 +161,7 @@ response_status_code
 - 테스트 발송도 기록할 수 있어 `posts` FK는 두지 않는다.
 
 향후 버저닝은 `posts` 테이블을 직접 복잡하게 만들지 말고,
-`thread_id`를 참조하는 별도 `post_versions` 테이블로 확장한다.
+`board_type`, `thread_id`를 참조하는 별도 `post_versions` 테이블로 확장한다.
 
 예상 확장 필드:
 
@@ -163,8 +178,8 @@ change_type
 ## 신규 감지 정책
 
 - 최신 게시글 목록을 가져온다.
-- DB에 같은 `thread_id`가 없으면 신규 글이다.
-- DB에 같은 `thread_id`가 있으면 기존 글이다.
+- 같은 `board_type` 안에서 DB에 같은 `thread_id`가 없으면 신규 글이다.
+- 같은 `board_type` 안에서 DB에 같은 `thread_id`가 있으면 기존 글이다.
 - 1차 MVP에서는 같은 `thread_id`의 제목/본문 변경을 감지하지 않는다.
 - 신규 글은 Discord 전송 전에 먼저 DB에 저장한다.
 - 신규 글 저장 시 해당 글의 `notification_deliveries` pending row를 만든다.
@@ -190,6 +205,8 @@ DISCORD_WEBHOOK_URL
 작성일: {published_at}
 링크: {url}
 ```
+
+이벤트 메시지는 같은 `published_at` 값에 `작성일` 대신 `기간` 라벨을 사용한다.
 
 알림 메시지는 목록에서 수집한 데이터만 사용한다. 상세 본문 수집, 본문 요약, LLM 요약은 현재 제품 방향에서 제외한다.
 
@@ -249,7 +266,7 @@ failed: N
 
 ## 확장 리스크
 
-- 현재 DB는 `thread_id` 단일 primary key를 사용한다. 향후 게시판을 실제로 늘릴 때는 `(board_type, thread_id)` 기준 유니크 제약을 검토한다.
+- DB는 `(board_type, thread_id)` 복합 primary key를 사용한다. 같은 게시글 ID가 다른 게시판에서 재사용되어도 별도 게시글로 저장한다.
 - 미등록 `board_type`은 알림 라벨 매핑 실패로 처리하고 공지사항으로 대체하지 않는다. 현재는 스키마 변경 없이 실패 집계와 로그에 남기며, pending 재시도 상태가 유지될 수 있다.
 
 ## 커밋 전 체크
